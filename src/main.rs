@@ -1,4 +1,5 @@
 extern crate ggez;
+extern crate nalgebra;
 extern crate openmpt;
 extern crate rodio;
 
@@ -56,6 +57,7 @@ struct State {
   dt: Duration,
   play_offset: Duration,
   module: Module,
+  module_duration: f64,
   pattern: Vec<Vec<Option<u8>>>,
   sink: Sink,
   buffer: Vec<f32>,
@@ -65,9 +67,11 @@ impl State {
   fn new() -> State {
     let mut module = Module::create(
       &mut File::open("music/weeppiko_musix_-_were_fighting_again.mptm").expect("open mod file"),
+      // &mut File::open("music/LPChip - Wisdom Of Purity.it").expect("open mod file"),
       Logger::None,
       &[]
     ).unwrap();
+    let module_duration = module.get_duration_seconds();
 
     let pattern = get_pattern(&mut module);
 
@@ -78,6 +82,7 @@ impl State {
       dt: Duration::default(),
       play_offset: Duration::default(),
       module: module,
+      module_duration: module_duration,
       pattern: pattern,
       sink: sink,
       buffer: vec![0f32; BUFFER_LEN],
@@ -110,7 +115,32 @@ impl event::EventHandler for State {
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::clear(ctx, graphics::WHITE);
 
-    dbg!(self.pattern.len());
+    let completion = self.play_offset.as_secs_f64() / self.module_duration;
+    let row_idx = (completion * (self.pattern.len() as f64)).floor() as usize;
+    let row = &self.pattern[row_idx];
+    
+    let window = graphics::screen_coordinates(ctx);
+    let rect_mesh = graphics::Mesh::new_rectangle(
+      ctx,
+      graphics::DrawMode::fill(),
+      graphics::Rect::new(
+        0.0,
+        0.0,
+        window.w/(row.len() as f32),
+        window.h/128.0
+      ),
+      graphics::Color::from_rgb(0, 255, 128)
+    ).unwrap();
+
+    for (i, cell) in row.iter().enumerate() {
+      if let Some(pitch) = cell {
+        let dest = nalgebra::Point2::new(
+          (i as f32) * window.w/(row.len() as f32),
+          (*pitch as f32) * window.h/128.0,
+        );
+        graphics::draw(ctx, &rect_mesh, graphics::DrawParam::default().dest(dest)).unwrap();
+      }
+    }
 
     graphics::present(ctx)
   }
