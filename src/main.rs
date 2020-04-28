@@ -8,30 +8,79 @@ use std::{
 };
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
-use openmpt::module::{Module, Logger};
+use openmpt::{
+  module::{Module, Logger},
+  mod_command::{Note}
+};
 use rodio::{buffer::SamplesBuffer, Sink};
+
+const SAMPLES_PER_SEC: usize = 44100;
+const BUFFER_LEN: usize = SAMPLES_PER_SEC/4;
+
+fn get_pattern(module: &mut Module) -> Vec<Vec<Option<u8>>> {
+  dbg!(module.get_num_patterns());
+  dbg!(module.get_num_orders());
+  dbg!(module.get_num_channels());
+  dbg!(module.get_num_instruments());
+  dbg!(module.get_num_samples());
+
+  let num_orders = module.get_num_orders();
+  let num_channels = module.get_num_channels();
+
+  let mut r_pattern = Vec::new();
+
+  for order_num in 0..num_orders {
+    let mut pattern = module.get_pattern_by_order(order_num).unwrap();
+    let num_rows = pattern.get_num_rows();
+    for row_num in 0..num_rows {
+      let mut row_pattern = Vec::new();
+      let mut row = pattern.get_row_by_number(row_num).unwrap();
+      for channel_num in 0..num_channels {
+        let mut cell = row.get_cell_by_channel(channel_num).unwrap();
+        if let Ok(mod_command) = cell.get_data() {
+          match mod_command.note {
+            Note::Note(pitch) => row_pattern.push(Some(pitch)),
+            _ => row_pattern.push(None)
+          }
+        }
+      }
+  
+      r_pattern.push(row_pattern);
+    }
+  }
+
+  r_pattern
+}
 
 struct State {
   dt: Duration,
+  play_offset: Duration,
   module: Module,
+  pattern: Vec<Vec<Option<u8>>>,
   sink: Sink,
   buffer: Vec<f32>,
 }
 
 impl State {
   fn new() -> State {
+    let mut module = Module::create(
+      &mut File::open("music/weeppiko_musix_-_were_fighting_again.mptm").expect("open mod file"),
+      Logger::None,
+      &[]
+    ).unwrap();
+
+    let pattern = get_pattern(&mut module);
+
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
 
     State {
       dt: Duration::default(),
-      module: Module::create(
-        &mut File::open("music/LPChip - Wisdom Of Purity.it").expect("open mod file"),
-        Logger::None,
-        &[]
-      ).unwrap(),
+      play_offset: Duration::default(),
+      module: module,
+      pattern: pattern,
       sink: sink,
-      buffer: vec![0f32; 44100],
+      buffer: vec![0f32; BUFFER_LEN],
     }
   }
 }
@@ -41,12 +90,16 @@ impl event::EventHandler for State {
     graphics::set_window_title(ctx, "Upbeat");
     self.dt = timer::delta(ctx);
 
+    if !self.sink.is_paused() {
+      self.play_offset += self.dt;
+    }
+
     if self.sink.len() < 2 {
-      let mut avail_samples = self.module.read_interleaved_float_stereo(44100, &mut self.buffer);
+      let mut avail_samples = self.module.read_interleaved_float_stereo(SAMPLES_PER_SEC as i32, &mut self.buffer);
       avail_samples = avail_samples << 1; // We're in interleaved stereo
       if avail_samples > 0 {
         let vec: Vec<f32> = self.buffer[..avail_samples].into();
-        let samples_buffer = SamplesBuffer::new(2, 44100, vec);
+        let samples_buffer = SamplesBuffer::new(2, SAMPLES_PER_SEC as u32, vec);
         self.sink.append(samples_buffer);
       }
     }
@@ -56,6 +109,9 @@ impl event::EventHandler for State {
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::clear(ctx, graphics::WHITE);
+
+    dbg!(self.pattern.len());
+
     graphics::present(ctx)
   }
 
