@@ -115,31 +115,35 @@ impl event::EventHandler for State {
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::clear(ctx, graphics::WHITE);
 
-    let completion = self.play_offset.as_secs_f64() / self.module_duration;
-    let row_idx = (completion * (self.pattern.len() as f64)).floor() as usize;
-    let row = &self.pattern[row_idx];
-    
     let window = graphics::screen_coordinates(ctx);
+    let rect = graphics::Rect::new(
+      0.0,
+      0.0,
+      window.w/20.0,
+      window.h/128.0
+    );
     let rect_mesh = graphics::Mesh::new_rectangle(
       ctx,
       graphics::DrawMode::fill(),
-      graphics::Rect::new(
-        0.0,
-        0.0,
-        window.w/(row.len() as f32),
-        window.h/128.0
-      ),
+      rect,
       graphics::Color::from_rgb(0, 255, 128)
     ).unwrap();
 
-    for (i, cell) in row.iter().enumerate() {
-      if let Some(pitch) = cell {
-        let dest = nalgebra::Point2::new(
-          (i as f32) * window.w/(row.len() as f32),
-          (*pitch as f32) * window.h/128.0,
-        );
-        graphics::draw(ctx, &rect_mesh, graphics::DrawParam::default().dest(dest)).unwrap();
+    let completion = (self.play_offset.as_secs_f64() / self.module_duration) as f32;
+    let completion_offset_x = completion * rect.w * (self.pattern.len() as f32);
+
+    let instrument = 2;
+
+    for r in 0..self.pattern.len() {
+      let x = (r as f32) * rect.w - completion_offset_x;
+      if x >= (0.0 - rect.w) && x <= window.w { 
+        let cell = self.pattern[r][instrument];
+        if let Some(pitch) = cell {
+          let dest = nalgebra::Point2::new(x, window.h - ((pitch as f32) * window.h/128.0));
+          graphics::draw(ctx, &rect_mesh, graphics::DrawParam::default().dest(dest)).unwrap();
+        }
       }
+
     }
 
     graphics::present(ctx)
