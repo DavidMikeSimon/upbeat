@@ -4,8 +4,10 @@ extern crate openmpt;
 extern crate rodio;
 
 use std::{
+  convert::TryInto,
   fs::File,
   time::Duration,
+  iter
 };
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
@@ -18,29 +20,57 @@ use rodio::{buffer::SamplesBuffer, Sink};
 const SAMPLES_PER_SEC: usize = 44100;
 const BUFFER_LEN: usize = SAMPLES_PER_SEC/4;
 
-fn get_pattern(module: &mut Module) -> Vec<Vec<Option<u8>>> {
+#[derive(Copy, Clone, Debug)]
+enum RelativePitch {
+  High,
+  Low
+}
+
+struct PitchInfo {
+  pitch: u8,
+  relative_pitch: RelativePitch,
+}
+
+fn get_pattern(module: &mut Module) -> Vec<Vec<Option<PitchInfo>>> {
   dbg!(module.get_num_patterns());
   dbg!(module.get_num_orders());
   dbg!(module.get_num_channels());
   dbg!(module.get_num_instruments());
   dbg!(module.get_num_samples());
 
-  let num_orders = module.get_num_orders();
-  let num_channels = module.get_num_channels();
+  let num_orders: usize = module.get_num_orders().try_into().unwrap();
+  let num_channels: usize = module.get_num_channels().try_into().unwrap();
 
   let mut r_pattern = Vec::new();
 
+  let mut prior_pitch: Vec<u8> = iter::repeat(0).take(num_channels).collect();
+  let mut prior_relative_pitch: Vec<RelativePitch> = iter::repeat(RelativePitch::High).take(num_channels).collect();
+
   for order_num in 0..num_orders {
-    let mut pattern = module.get_pattern_by_order(order_num).unwrap();
+    let mut pattern = module.get_pattern_by_order(order_num.try_into().unwrap()).unwrap();
     let num_rows = pattern.get_num_rows();
     for row_num in 0..num_rows {
       let mut row_pattern = Vec::new();
       let mut row = pattern.get_row_by_number(row_num).unwrap();
       for channel_num in 0..num_channels {
-        let mut cell = row.get_cell_by_channel(channel_num).unwrap();
+        let mut cell = row.get_cell_by_channel(channel_num.try_into().unwrap()).unwrap();
         if let Ok(mod_command) = cell.get_data() {
           match mod_command.note {
-            Note::Note(pitch) => row_pattern.push(Some(pitch)),
+            Note::Note(pitch) => {
+              let relative_pitch = if pitch == prior_pitch[channel_num] {
+                prior_relative_pitch[channel_num]
+              } else if pitch > prior_pitch[channel_num] {
+                RelativePitch::High
+              } else {
+                RelativePitch::Low
+              };
+              row_pattern.push(Some(PitchInfo {
+                pitch: pitch,
+                relative_pitch: relative_pitch,
+              }));
+              prior_relative_pitch[channel_num] = relative_pitch;
+              prior_pitch[channel_num] = pitch;
+            }
             _ => row_pattern.push(None)
           }
         }
@@ -58,7 +88,7 @@ struct State {
   play_offset: Duration,
   module: Module,
   module_duration: f64,
-  pattern: Vec<Vec<Option<u8>>>,
+  pattern: Vec<Vec<Option<PitchInfo>>>,
   sink: Sink,
   buffer: Vec<f32>,
 }
@@ -132,18 +162,32 @@ impl event::EventHandler for State {
 
     graphics::draw(ctx, &line_mesh, graphics::DrawParam::default()).unwrap();
 
-    let circle_radius = 10.0;
-    let note_spacing = window.w/20.0;
+    let arrow_width = 20.0;
+    let arrow_height = 10.0;
 
-    let circle_mesh = graphics::Mesh::new_circle(
+    let high_mesh = graphics::Mesh::new_polygon(
       ctx,
       graphics::DrawMode::fill(),
-      nalgebra::Point2::new(0.0, 0.0),
-      circle_radius,
-      0.2,
-      graphics::Color::from_rgb(0, 192, 128)
+      &[
+        nalgebra::Point2::new(0.0, -arrow_height/2.0),
+        nalgebra::Point2::new(arrow_width/2.0, arrow_height/2.0),
+        nalgebra::Point2::new(-arrow_width/2.0, arrow_height/2.0),
+      ],
+      graphics::Color::from_rgb(0, 192, 32)
     ).unwrap();
 
+    let low_mesh = graphics::Mesh::new_polygon(
+      ctx,
+      graphics::DrawMode::fill(),
+      &[
+        nalgebra::Point2::new(0.0, arrow_height/2.0),
+        nalgebra::Point2::new(-arrow_width/2.0, -arrow_height/2.0),
+        nalgebra::Point2::new(arrow_width/2.0, -arrow_height/2.0),
+      ],
+      graphics::Color::from_rgb(0, 32, 192)
+    ).unwrap();
+
+    let note_spacing = window.w/20.0;
     let completion = (self.play_offset.as_secs_f64() / self.module_duration) as f32;
     let completion_offset_x = completion * note_spacing * (self.pattern.len() as f32);
 
@@ -151,11 +195,19 @@ impl event::EventHandler for State {
 
     for r in 0..self.pattern.len() {
       let x = (r as f32) * note_spacing - completion_offset_x + now_line_x + now_line_width/2.0;
-      if x >= (0.0 - circle_radius) && x <= window.w { 
-        let cell = self.pattern[r][instrument];
-        if let Some(pitch) = cell {
-          let dest = nalgebra::Point2::new(x, window.h - ((pitch as f32) * window.h/128.0));
-          graphics::draw(ctx, &circle_mesh, graphics::DrawParam::default().dest(dest)).unwrap();
+      if x >= (0.0 - arrow_width) && x <= window.w { 
+        let cell = &self.pattern[r][instrument];
+        if let Some(pitch_info) = cell {
+          let mesh = match pitch_info.relative_pitch {
+            RelativePitch::High => &high_mesh,
+            RelativePitch::Low => &low_mesh,
+          };
+          let y = window.h - ((pitch_info.pitch as f32) * window.h/128.0);
+          graphics::draw(
+            ctx,
+            mesh,
+            graphics::DrawParam::default().dest(nalgebra::Point2::new(x, y))
+          ).unwrap();
         }
       }
     }
