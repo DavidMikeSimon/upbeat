@@ -116,34 +116,48 @@ impl event::EventHandler for State {
     graphics::clear(ctx, graphics::WHITE);
 
     let window = graphics::screen_coordinates(ctx);
-    let rect = graphics::Rect::new(
-      0.0,
-      0.0,
-      window.w/20.0,
-      window.h/128.0
-    );
-    let rect_mesh = graphics::Mesh::new_rectangle(
+
+    let now_line_x = 200.0;
+    let now_line_width = 2.0;
+
+    let line_mesh = graphics::Mesh::new_line(
+      ctx,
+      &[
+        nalgebra::Point2::new(now_line_x + now_line_width/2.0, 0.0),
+        nalgebra::Point2::new(now_line_x + now_line_width/2.0, window.h)
+      ],
+      now_line_width,
+      graphics::BLACK
+    ).unwrap();
+
+    graphics::draw(ctx, &line_mesh, graphics::DrawParam::default()).unwrap();
+
+    let circle_radius = 10.0;
+    let note_spacing = window.w/20.0;
+
+    let circle_mesh = graphics::Mesh::new_circle(
       ctx,
       graphics::DrawMode::fill(),
-      rect,
-      graphics::Color::from_rgb(0, 255, 128)
+      nalgebra::Point2::new(0.0, 0.0),
+      circle_radius,
+      0.2,
+      graphics::Color::from_rgb(0, 192, 128)
     ).unwrap();
 
     let completion = (self.play_offset.as_secs_f64() / self.module_duration) as f32;
-    let completion_offset_x = completion * rect.w * (self.pattern.len() as f32);
+    let completion_offset_x = completion * note_spacing * (self.pattern.len() as f32);
 
     let instrument = 2;
 
     for r in 0..self.pattern.len() {
-      let x = (r as f32) * rect.w - completion_offset_x;
-      if x >= (0.0 - rect.w) && x <= window.w { 
+      let x = (r as f32) * note_spacing - completion_offset_x + now_line_x + now_line_width/2.0;
+      if x >= (0.0 - circle_radius) && x <= window.w { 
         let cell = self.pattern[r][instrument];
         if let Some(pitch) = cell {
           let dest = nalgebra::Point2::new(x, window.h - ((pitch as f32) * window.h/128.0));
-          graphics::draw(ctx, &rect_mesh, graphics::DrawParam::default().dest(dest)).unwrap();
+          graphics::draw(ctx, &circle_mesh, graphics::DrawParam::default().dest(dest)).unwrap();
         }
       }
-
     }
 
     graphics::present(ctx)
