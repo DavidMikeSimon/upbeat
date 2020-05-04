@@ -104,7 +104,6 @@ impl State {
   fn new() -> State {
     let mut module = Module::create(
       &mut File::open("music/weeppiko_musix_-_were_fighting_again.mptm").expect("open mod file"),
-      // &mut File::open("music/LPChip - Wisdom Of Purity.it").expect("open mod file"),
       Logger::None,
       &[]
     ).unwrap();
