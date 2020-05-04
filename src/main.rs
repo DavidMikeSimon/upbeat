@@ -141,7 +141,7 @@ impl event::EventHandler for State {
       let beats_per_second = (self.pattern.len() as f64)/self.module_duration;
       let input_note_index: isize = (input.play_offset.as_secs_f64() * beats_per_second.round()) as isize;
       let mut nearest_note_index: Option<usize> = None;
-      let mut nearest_note_offset: f64 = 0.0;
+      let mut nearest_note_offset_ms: f64 = 0.0;
       for index_offset in -4..4 {
         let idx: isize = input_note_index + index_offset;
         if idx < 0 { continue; }
@@ -149,16 +149,16 @@ impl event::EventHandler for State {
         if idx >= self.pattern.len() { continue; }
         if self.pattern[idx][INSTRUMENT].is_none() { continue; }
 
-        let this_offset = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second).abs();
+        let this_offset_ms = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second) * 1000.0;
         match nearest_note_index {
           None => {
             nearest_note_index = Some(idx);
-            nearest_note_offset = this_offset;
+            nearest_note_offset_ms = this_offset_ms;
           },
           Some(_) => {
-            if this_offset < nearest_note_offset {
+            if this_offset_ms.abs() < nearest_note_offset_ms.abs() {
               nearest_note_index = Some(idx);
-              nearest_note_offset = this_offset;
+              nearest_note_offset_ms = this_offset_ms;
             }
           }
         }
@@ -166,7 +166,7 @@ impl event::EventHandler for State {
 
       if let Some(idx) = nearest_note_index {
         let relative_pitch_ok = input.relative_pitch == self.pattern[idx][INSTRUMENT].as_ref().unwrap().relative_pitch;
-        println!("MATCH {}: {}sec", relative_pitch_ok, nearest_note_offset);
+        println!("MATCH {:5}: {:+5.2}msec", relative_pitch_ok, nearest_note_offset_ms);
       } else {
         println!("NO MATCH");
       }
