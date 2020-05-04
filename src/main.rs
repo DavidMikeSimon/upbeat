@@ -19,8 +19,9 @@ use rodio::{buffer::SamplesBuffer, Sink};
 
 const SAMPLES_PER_SEC: usize = 44100;
 const BUFFER_LEN: usize = SAMPLES_PER_SEC/4;
+const INSTRUMENT: usize = 2;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
   High,
   Low
@@ -83,9 +84,15 @@ fn get_pattern(module: &mut Module) -> Vec<Vec<Option<PitchInfo>>> {
   r_pattern
 }
 
+struct RelativePitchInput {
+  relative_pitch: RelativePitch,
+  play_offset: Duration
+}
+
 struct State {
   dt: Duration,
   play_offset: Duration,
+  relative_pitch_input: Option<RelativePitchInput>,
   module: Module,
   module_duration: f64,
   pattern: Vec<Vec<Option<PitchInfo>>>,
@@ -111,6 +118,7 @@ impl State {
     State {
       dt: Duration::default(),
       play_offset: Duration::default(),
+      relative_pitch_input: None,
       module: module,
       module_duration: module_duration,
       pattern: pattern,
@@ -125,8 +133,45 @@ impl event::EventHandler for State {
     graphics::set_window_title(ctx, "Upbeat");
     self.dt = timer::delta(ctx);
 
-    if !self.sink.is_paused() {
-      self.play_offset += self.dt;
+    if self.sink.is_paused() { return Ok(()); }
+
+    self.play_offset += self.dt;
+
+    if let Some(input) = &self.relative_pitch_input {
+      let beats_per_second = (self.pattern.len() as f64)/self.module_duration;
+      let input_note_index: isize = (input.play_offset.as_secs_f64() * beats_per_second.round()) as isize;
+      let mut nearest_note_index: Option<usize> = None;
+      let mut nearest_note_offset: f64 = 0.0;
+      for index_offset in -4..4 {
+        let idx: isize = input_note_index + index_offset;
+        if idx < 0 { continue; }
+        let idx: usize = idx.try_into().unwrap();
+        if idx >= self.pattern.len() { continue; }
+        if self.pattern[idx][INSTRUMENT].is_none() { continue; }
+
+        let this_offset = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second).abs();
+        match nearest_note_index {
+          None => {
+            nearest_note_index = Some(idx);
+            nearest_note_offset = this_offset;
+          },
+          Some(_) => {
+            if this_offset < nearest_note_offset {
+              nearest_note_index = Some(idx);
+              nearest_note_offset = this_offset;
+            }
+          }
+        }
+      }
+
+      if let Some(idx) = nearest_note_index {
+        let relative_pitch_ok = input.relative_pitch == self.pattern[idx][INSTRUMENT].as_ref().unwrap().relative_pitch;
+        println!("MATCH {}: {}sec", relative_pitch_ok, nearest_note_offset);
+      } else {
+        println!("NO MATCH");
+      }
+
+      self.relative_pitch_input = None;
     }
 
     if self.sink.len() < 2 {
@@ -191,12 +236,10 @@ impl event::EventHandler for State {
     let completion = (self.play_offset.as_secs_f64() / self.module_duration) as f32;
     let completion_offset_x = completion * note_spacing * (self.pattern.len() as f32);
 
-    let instrument = 2;
-
     for r in 0..self.pattern.len() {
       let x = (r as f32) * note_spacing - completion_offset_x + now_line_x + now_line_width/2.0;
       if x >= (0.0 - arrow_width) && x <= window.w { 
-        let cell = &self.pattern[r][instrument];
+        let cell = &self.pattern[r][INSTRUMENT];
         if let Some(pitch_info) = cell {
           let mesh = match pitch_info.relative_pitch {
             RelativePitch::High => &high_mesh,
@@ -224,16 +267,27 @@ impl event::EventHandler for State {
   ) {
     if repeat { return; }
 
-    match keycode {
-      keyboard::KeyCode::Escape => event::quit(ctx),
-      keyboard::KeyCode::Space => {
-        if self.sink.is_paused() {
-          self.sink.play();
-        } else {
-          self.sink.pause();
-        }
-      },
-      _ => {}
+    if self.sink.is_paused() {
+      match keycode {
+        keyboard::KeyCode::Escape => event::quit(ctx),
+        keyboard::KeyCode::Space => self.sink.play(),
+        _ => {}
+      }
+    } else {
+      // TODO: Is the play_offset here slightly off because of time elapsed since last update()?
+      match keycode {
+        keyboard::KeyCode::Escape => event::quit(ctx),
+        keyboard::KeyCode::Space => self.sink.pause(),
+        keyboard::KeyCode::Up => self.relative_pitch_input = Some(RelativePitchInput {
+          relative_pitch: RelativePitch::High,
+          play_offset: self.play_offset,
+        }),
+        keyboard::KeyCode::Down => self.relative_pitch_input = Some(RelativePitchInput {
+          relative_pitch: RelativePitch::Low,
+          play_offset: self.play_offset,
+        }),
+        _ => {}
+      }
     }
   }
 }
