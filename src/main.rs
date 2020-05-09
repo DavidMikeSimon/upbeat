@@ -141,7 +141,7 @@ impl event::EventHandler for State {
       let input_note_index: isize = (input.play_offset.as_secs_f64() * beats_per_second.round()) as isize;
       let mut nearest_note_index: Option<usize> = None;
       let mut nearest_note_offset_ms: f64 = 0.0;
-      for index_offset in -4..4 {
+      for index_offset in -1..1 {
         let idx: isize = input_note_index + index_offset;
         if idx < 0 { continue; }
         let idx: usize = idx.try_into().unwrap();
