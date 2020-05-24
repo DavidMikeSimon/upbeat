@@ -41,7 +41,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   } else {
     panic!("MIDI timing must be metrical");
   }
-  let ticks_per_beat = ticks_per_beat as f64;
+  let ticks_per_beat: f64 = ticks_per_beat.into();
 
   let mut prior_pitch = 0;
   let mut prior_relative_pitch = RelativePitch::High;
@@ -56,7 +56,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   if ms_per_beat == 0 {
     panic!("MIDI track 0 must include tempo information");
   }
-  let ms_per_beat = ms_per_beat as f64;
+  let ms_per_beat: f64 = ms_per_beat.into();
 
   for event in &midi.tracks[TARGET_TRACK] {
     play_offset += ((event.delta.as_int() as f64) * ms_per_beat)/(ticks_per_beat*1000.0*1000.0);
