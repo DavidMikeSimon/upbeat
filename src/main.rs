@@ -1,25 +1,20 @@
 extern crate ggez;
 extern crate nalgebra;
-extern crate openmpt;
 extern crate rodio;
+extern crate midly;
 
 use std::{
   convert::TryInto,
-  fs::File,
-  time::Duration,
-  iter
+  fs,
+  io::BufReader,
+  time::Duration
 };
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
-use openmpt::{
-  module::{Module, Logger},
-  mod_command::{Note, /*VolumeCommand, EffectCommand*/}
-};
-use rodio::{buffer::SamplesBuffer, Sink};
+use rodio::{Sink};
+use midly::{Smf, Format, EventKind, MidiMessage};
 
-const SAMPLES_PER_SEC: usize = 44100;
-const BUFFER_LEN: usize = SAMPLES_PER_SEC/4;
-const TARGET_CHANNEL: usize = 2;
+const TARGET_TRACK: usize = 10;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
@@ -32,77 +27,53 @@ struct PitchInfo {
   relative_pitch: RelativePitch,
 }
 
-fn get_pattern(module: &mut Module) -> Vec<Vec<Option<PitchInfo>>> {
-  dbg!(module.get_num_patterns());
-  dbg!(module.get_num_orders());
-  dbg!(module.get_num_channels());
-  dbg!(module.get_num_instruments());
-  dbg!(module.get_num_samples());
+fn get_duration_seconds(midi: &Smf) -> f64 {
+  120.0
+}
 
-  let num_orders: usize = module.get_num_orders().try_into().unwrap();
-  let num_channels: usize = module.get_num_channels().try_into().unwrap();
-
+fn get_pattern(midi: &Smf) -> Vec<Vec<Option<PitchInfo>>> {
   let mut r_pattern = Vec::new();
 
-  let mut prior_pitch: Vec<u8> = iter::repeat(0).take(num_channels).collect();
-  let mut prior_relative_pitch: Vec<RelativePitch> = iter::repeat(RelativePitch::High).take(num_channels).collect();
+  match midi.header.format {
+    Format::Parallel => {}, // OK
+    _ => panic!("MIDI file must be in parallel (simultaneous tracks) format")
+  }
 
-  for order_num in 0..num_orders {
-    let mut pattern = module.get_pattern_by_order(order_num.try_into().unwrap()).unwrap();
-    let num_rows = pattern.get_num_rows();
-    for row_num in 0..num_rows {
-      let mut row_pattern = Vec::new();
-      let mut row = pattern.get_row_by_number(row_num).unwrap();
-      for channel_num in 0..num_channels {
-        let mut cell = row.get_cell_by_channel(channel_num.try_into().unwrap()).unwrap();
-        if let Ok(mod_command) = cell.get_data() {
-          match mod_command.note {
-            Note::Note(pitch) => {
-              // if channel_num == TARGET_CHANNEL { println!("Note"); }
-              let relative_pitch = if pitch == prior_pitch[channel_num] {
-                prior_relative_pitch[channel_num]
-              } else if pitch > prior_pitch[channel_num] {
+  println!("midi timing {:?}", midi.header.timing);
+
+  for track in &midi.tracks {
+    let mut prior_pitch = 0;
+    let mut prior_relative_pitch = RelativePitch::High;
+    let mut track_pattern = Vec::new();
+
+    for event in track {
+      match event.kind {
+        EventKind::Midi{ message: msg, .. } => {
+          match msg {
+            MidiMessage::NoteOn { key: pitch, .. } => {
+              let pitch = pitch.as_int();
+              let relative_pitch = if pitch == prior_pitch {
+                prior_relative_pitch
+              } else if pitch > prior_pitch {
                 RelativePitch::High
               } else {
                 RelativePitch::Low
               };
-              row_pattern.push(Some(PitchInfo {
+              track_pattern.push(Some(PitchInfo {
                 pitch: pitch,
                 relative_pitch: relative_pitch,
               }));
-              prior_relative_pitch[channel_num] = relative_pitch;
-              prior_pitch[channel_num] = pitch;
-            }
-            Note::None => {
-              // if channel_num == TARGET_CHANNEL { println!("----"); }
-              row_pattern.push(None)
-            }
-            Note::Special(_) => {
-              // if channel_num == TARGET_CHANNEL { println!("## SPECIAL NOTE ##"); }
-              row_pattern.push(None)
-            }
+              prior_relative_pitch = relative_pitch;
+              prior_pitch = pitch;
+            },
+            _ => {} // Ignore
           }
-
-          // match mod_command.command {
-            // EffectCommand::None => {},
-            // _ => {
-              // if channel_num == TARGET_CHANNEL { println!("  ## EFFECT ##"); }
-            // }
-          // }
-
-          // match mod_command.volcmd {
-            // VolumeCommand::None => {},
-            // _ => {
-              // if channel_num == TARGET_CHANNEL { println!("  ## VOLUME ##"); }
-            // }
-          // }
-        } else {
-          // if channel_num == TARGET_CHANNEL { println!("## NO COMMAND ##"); }
-        }
+        },
+        _ => {} // Ignore
       }
-  
-      r_pattern.push(row_pattern);
     }
+
+    r_pattern.push(track_pattern);
   }
 
   r_pattern
@@ -117,36 +88,33 @@ struct State {
   dt: Duration,
   play_offset: Duration,
   relative_pitch_input: Option<RelativePitchInput>,
-  module: Module,
-  module_duration: f64,
+  song_duration: f64,
   pattern: Vec<Vec<Option<PitchInfo>>>,
   sink: Sink,
-  buffer: Vec<f32>,
 }
 
 impl State {
   fn new() -> State {
-    let mut module = Module::create(
-      &mut File::open("music/weeppiko_musix_-_were_fighting_again.mptm").expect("open mod file"),
-      Logger::None,
-      &[]
-    ).unwrap();
-    let module_duration = module.get_duration_seconds();
 
-    let pattern = get_pattern(&mut module);
+    let midi_bytes = fs::read("music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
+    let midi = Smf::parse(&midi_bytes).unwrap();
+    let song_duration = get_duration_seconds(&midi);
+    let pattern = get_pattern(&midi);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
+
+    let ogg_file = fs::File::open("music/weeppiko_musix_-_were_fighting_again.ogg").unwrap();
+    let source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
+    sink.append(source);
 
     State {
       dt: Duration::default(),
       play_offset: Duration::default(),
       relative_pitch_input: None,
-      module: module,
-      module_duration: module_duration,
+      song_duration: song_duration,
       pattern: pattern,
-      sink: sink,
-      buffer: vec![0f32; BUFFER_LEN],
+      sink: sink
     }
   }
 }
@@ -156,22 +124,12 @@ impl event::EventHandler for State {
     graphics::set_window_title(ctx, "Upbeat");
     self.dt = timer::delta(ctx);
 
-    if self.sink.len() < 10 {
-      let mut avail_samples = self.module.read_interleaved_float_stereo(SAMPLES_PER_SEC as i32, &mut self.buffer);
-      avail_samples = avail_samples << 1; // We're in interleaved stereo
-      if avail_samples > 0 {
-        let vec: Vec<f32> = self.buffer[..avail_samples].into();
-        let samples_buffer = SamplesBuffer::new(2, SAMPLES_PER_SEC as u32, vec);
-        self.sink.append(samples_buffer);
-      }
-    }
-
     if self.sink.is_paused() { return Ok(()); }
 
     self.play_offset += self.dt;
 
     if let Some(input) = &self.relative_pitch_input {
-      let beats_per_second = (self.pattern.len() as f64)/self.module_duration;
+      let beats_per_second = (self.pattern[TARGET_TRACK].len() as f64)/self.song_duration;
       let input_note_index: isize = (input.play_offset.as_secs_f64() * beats_per_second.round()) as isize;
       let mut nearest_note_index: Option<usize> = None;
       let mut nearest_note_offset_ms: f64 = 0.0;
@@ -179,8 +137,8 @@ impl event::EventHandler for State {
         let idx: isize = input_note_index + index_offset;
         if idx < 0 { continue; }
         let idx: usize = idx.try_into().unwrap();
-        if idx >= self.pattern.len() { continue; }
-        if self.pattern[idx][TARGET_CHANNEL].is_none() { continue; }
+        if idx >= self.pattern[TARGET_TRACK].len() { continue; }
+        if self.pattern[TARGET_TRACK][idx].is_none() { continue; }
 
         let this_offset_ms = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second) * 1000.0;
         match nearest_note_index {
@@ -198,7 +156,7 @@ impl event::EventHandler for State {
       }
 
       if let Some(idx) = nearest_note_index {
-        let relative_pitch_ok = input.relative_pitch == self.pattern[idx][TARGET_CHANNEL].as_ref().unwrap().relative_pitch;
+        let relative_pitch_ok = input.relative_pitch == self.pattern[TARGET_TRACK][idx].as_ref().unwrap().relative_pitch;
         println!("{:03} MATCH {:5}: {:+5.2}msec", idx, relative_pitch_ok, nearest_note_offset_ms);
       } else {
         println!("NO MATCH");
@@ -256,19 +214,19 @@ impl event::EventHandler for State {
     ).unwrap();
 
     let note_spacing = window.w/20.0;
-    let completion = (self.play_offset.as_secs_f64() / self.module_duration) as f32;
-    let completion_offset_x = completion * note_spacing * (self.pattern.len() as f32);
+    let completion = (self.play_offset.as_secs_f64() / self.song_duration) as f32;
+    let completion_offset_x = completion * note_spacing * (self.pattern[TARGET_TRACK].len() as f32);
 
-    for r in 0..self.pattern.len() {
+    for r in 0..self.pattern[TARGET_TRACK].len() {
       let x = (r as f32) * note_spacing - completion_offset_x + now_line_x + now_line_width/2.0;
       if x >= (0.0 - arrow_width) && x <= window.w { 
-        let cell = &self.pattern[r][TARGET_CHANNEL];
+        let cell = &self.pattern[TARGET_TRACK][r];
         if let Some(pitch_info) = cell {
           let mesh = match pitch_info.relative_pitch {
             RelativePitch::High => &high_mesh,
             RelativePitch::Low => &low_mesh,
           };
-          let y = window.h - ((pitch_info.pitch as f32) * window.h/128.0);
+          let y = window.h - ((pitch_info.pitch as f32 - 64.0) * window.h/32.0 + 300.0);
           graphics::draw(
             ctx,
             mesh,
