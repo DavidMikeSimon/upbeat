@@ -13,13 +13,13 @@ use std::{
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
 use openmpt::{
   module::{Module, Logger},
-  mod_command::{Note}
+  mod_command::{Note, /*VolumeCommand, EffectCommand*/}
 };
 use rodio::{buffer::SamplesBuffer, Sink};
 
 const SAMPLES_PER_SEC: usize = 44100;
 const BUFFER_LEN: usize = SAMPLES_PER_SEC/4;
-const INSTRUMENT: usize = 2;
+const TARGET_CHANNEL: usize = 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
@@ -58,6 +58,7 @@ fn get_pattern(module: &mut Module) -> Vec<Vec<Option<PitchInfo>>> {
         if let Ok(mod_command) = cell.get_data() {
           match mod_command.note {
             Note::Note(pitch) => {
+              // if channel_num == TARGET_CHANNEL { println!("Note"); }
               let relative_pitch = if pitch == prior_pitch[channel_num] {
                 prior_relative_pitch[channel_num]
               } else if pitch > prior_pitch[channel_num] {
@@ -72,8 +73,31 @@ fn get_pattern(module: &mut Module) -> Vec<Vec<Option<PitchInfo>>> {
               prior_relative_pitch[channel_num] = relative_pitch;
               prior_pitch[channel_num] = pitch;
             }
-            _ => row_pattern.push(None)
+            Note::None => {
+              // if channel_num == TARGET_CHANNEL { println!("----"); }
+              row_pattern.push(None)
+            }
+            Note::Special(_) => {
+              // if channel_num == TARGET_CHANNEL { println!("## SPECIAL NOTE ##"); }
+              row_pattern.push(None)
+            }
           }
+
+          // match mod_command.command {
+            // EffectCommand::None => {},
+            // _ => {
+              // if channel_num == TARGET_CHANNEL { println!("  ## EFFECT ##"); }
+            // }
+          // }
+
+          // match mod_command.volcmd {
+            // VolumeCommand::None => {},
+            // _ => {
+              // if channel_num == TARGET_CHANNEL { println!("  ## VOLUME ##"); }
+            // }
+          // }
+        } else {
+          // if channel_num == TARGET_CHANNEL { println!("## NO COMMAND ##"); }
         }
       }
   
@@ -132,6 +156,16 @@ impl event::EventHandler for State {
     graphics::set_window_title(ctx, "Upbeat");
     self.dt = timer::delta(ctx);
 
+    if self.sink.len() < 10 {
+      let mut avail_samples = self.module.read_interleaved_float_stereo(SAMPLES_PER_SEC as i32, &mut self.buffer);
+      avail_samples = avail_samples << 1; // We're in interleaved stereo
+      if avail_samples > 0 {
+        let vec: Vec<f32> = self.buffer[..avail_samples].into();
+        let samples_buffer = SamplesBuffer::new(2, SAMPLES_PER_SEC as u32, vec);
+        self.sink.append(samples_buffer);
+      }
+    }
+
     if self.sink.is_paused() { return Ok(()); }
 
     self.play_offset += self.dt;
@@ -146,7 +180,7 @@ impl event::EventHandler for State {
         if idx < 0 { continue; }
         let idx: usize = idx.try_into().unwrap();
         if idx >= self.pattern.len() { continue; }
-        if self.pattern[idx][INSTRUMENT].is_none() { continue; }
+        if self.pattern[idx][TARGET_CHANNEL].is_none() { continue; }
 
         let this_offset_ms = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second) * 1000.0;
         match nearest_note_index {
@@ -164,23 +198,13 @@ impl event::EventHandler for State {
       }
 
       if let Some(idx) = nearest_note_index {
-        let relative_pitch_ok = input.relative_pitch == self.pattern[idx][INSTRUMENT].as_ref().unwrap().relative_pitch;
-        println!("MATCH {:5}: {:+5.2}msec", relative_pitch_ok, nearest_note_offset_ms);
+        let relative_pitch_ok = input.relative_pitch == self.pattern[idx][TARGET_CHANNEL].as_ref().unwrap().relative_pitch;
+        println!("{:03} MATCH {:5}: {:+5.2}msec", idx, relative_pitch_ok, nearest_note_offset_ms);
       } else {
         println!("NO MATCH");
       }
 
       self.relative_pitch_input = None;
-    }
-
-    if self.sink.len() < 2 {
-      let mut avail_samples = self.module.read_interleaved_float_stereo(SAMPLES_PER_SEC as i32, &mut self.buffer);
-      avail_samples = avail_samples << 1; // We're in interleaved stereo
-      if avail_samples > 0 {
-        let vec: Vec<f32> = self.buffer[..avail_samples].into();
-        let samples_buffer = SamplesBuffer::new(2, SAMPLES_PER_SEC as u32, vec);
-        self.sink.append(samples_buffer);
-      }
     }
 
     Ok(())
@@ -238,7 +262,7 @@ impl event::EventHandler for State {
     for r in 0..self.pattern.len() {
       let x = (r as f32) * note_spacing - completion_offset_x + now_line_x + now_line_width/2.0;
       if x >= (0.0 - arrow_width) && x <= window.w { 
-        let cell = &self.pattern[r][INSTRUMENT];
+        let cell = &self.pattern[r][TARGET_CHANNEL];
         if let Some(pitch_info) = cell {
           let mesh = match pitch_info.relative_pitch {
             RelativePitch::High => &high_mesh,
