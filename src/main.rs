@@ -4,7 +4,6 @@ extern crate rodio;
 extern crate midly;
 
 use std::{
-  convert::TryInto,
   fs,
   io::BufReader,
   time::Duration
@@ -96,7 +95,6 @@ struct State {
   dt: Duration,
   play_offset: Duration,
   relative_pitch_input: Option<RelativePitchInput>,
-  song_duration: f64,
   pattern: Vec<PatternNote>,
   sink: Sink,
 }
@@ -107,7 +105,6 @@ impl State {
     let midi_bytes = fs::read("music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
     let pattern = get_pattern(&midi);
-    let song_duration = pattern.last().unwrap().play_offset;
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
@@ -120,7 +117,6 @@ impl State {
       dt: Duration::default(),
       play_offset: Duration::default(),
       relative_pitch_input: None,
-      song_duration: song_duration,
       pattern: pattern,
       sink: sink
     }
@@ -137,39 +133,17 @@ impl event::EventHandler for State {
     self.play_offset += self.dt;
 
     if let Some(input) = &self.relative_pitch_input {
-      let beats_per_second = (self.pattern.len() as f64)/self.song_duration; // FIXME
-      let input_note_index: isize = (input.play_offset.as_secs_f64() * beats_per_second.round()) as isize;
-      let mut nearest_note_index: Option<usize> = None;
-      let mut nearest_note_offset_ms: f64 = 0.0;
-      for index_offset in -10..10 {
-        let idx: isize = input_note_index + index_offset;
-        if idx < 0 { continue; }
-        let idx: usize = idx.try_into().unwrap();
-        if idx >= self.pattern.len() { continue; }
-        // TODO: Have min/max time delta, not just pattern index
+      let nearest_pattern_note = self.pattern
+        .iter()
+        .min_by_key(|pn| {
+          let diff_sec = (pn.play_offset - input.play_offset.as_secs_f64()).abs();
+          (diff_sec * 1_000_000.0) as u32
+        })
+        .unwrap();
 
-        // FIXME
-        let this_offset_ms = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second) * 1000.0;
-        match nearest_note_index {
-          None => {
-            nearest_note_index = Some(idx);
-            nearest_note_offset_ms = this_offset_ms;
-          },
-          Some(_) => {
-            if this_offset_ms.abs() < nearest_note_offset_ms.abs() {
-              nearest_note_index = Some(idx);
-              nearest_note_offset_ms = this_offset_ms;
-            }
-          }
-        }
-      }
-
-      if let Some(idx) = nearest_note_index {
-        let relative_pitch_ok = input.relative_pitch == self.pattern[idx].relative_pitch;
-        println!("{:03} MATCH {:5}: {:+5.2}msec", idx, relative_pitch_ok, nearest_note_offset_ms);
-      } else {
-        println!("NO MATCH");
-      }
+      let nearest_note_offset = input.play_offset.as_secs_f64() - nearest_pattern_note.play_offset;
+      let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
+      println!("MATCH {:5}: {:+5.2}msec", relative_pitch_ok, nearest_note_offset * 1000.0);
 
       self.relative_pitch_input = None;
     }
