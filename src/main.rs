@@ -12,7 +12,7 @@ use std::{
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
 use rodio::{Sink};
-use midly::{Smf, Format, EventKind, MidiMessage};
+use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
 
 const TARGET_TRACK: usize = 10;
 
@@ -22,16 +22,13 @@ enum RelativePitch {
   Low
 }
 
-struct PitchInfo {
+struct PatternNote {
+  play_offset: f64,
   pitch: u8,
   relative_pitch: RelativePitch,
 }
 
-fn get_duration_seconds(midi: &Smf) -> f64 {
-  120.0
-}
-
-fn get_pattern(midi: &Smf) -> Vec<Vec<Option<PitchInfo>>> {
+fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   let mut r_pattern = Vec::new();
 
   match midi.header.format {
@@ -39,41 +36,52 @@ fn get_pattern(midi: &Smf) -> Vec<Vec<Option<PitchInfo>>> {
     _ => panic!("MIDI file must be in parallel (simultaneous tracks) format")
   }
 
-  println!("midi timing {:?}", midi.header.timing);
+  let ticks_per_beat;
+  if let Timing::Metrical(tpb) = midi.header.timing {
+    ticks_per_beat = tpb.as_int();
+  } else {
+    panic!("MIDI timing must be metrical");
+  }
+  let ticks_per_beat = ticks_per_beat as f64;
 
-  for track in &midi.tracks {
-    let mut prior_pitch = 0;
-    let mut prior_relative_pitch = RelativePitch::High;
-    let mut track_pattern = Vec::new();
+  let mut prior_pitch = 0;
+  let mut prior_relative_pitch = RelativePitch::High;
+  let mut play_offset = 0.0;
 
-    for event in track {
-      match event.kind {
-        EventKind::Midi{ message: msg, .. } => {
-          match msg {
-            MidiMessage::NoteOn { key: pitch, .. } => {
-              let pitch = pitch.as_int();
-              let relative_pitch = if pitch == prior_pitch {
-                prior_relative_pitch
-              } else if pitch > prior_pitch {
-                RelativePitch::High
-              } else {
-                RelativePitch::Low
-              };
-              track_pattern.push(Some(PitchInfo {
-                pitch: pitch,
-                relative_pitch: relative_pitch,
-              }));
-              prior_relative_pitch = relative_pitch;
-              prior_pitch = pitch;
-            },
-            _ => {} // Ignore
-          }
-        },
-        _ => {} // Ignore
-      }
+  let mut ms_per_beat = 0;
+  for event in &midi.tracks[0] { // Track 0 is the global timing track
+    if let EventKind::Meta(MetaMessage::Tempo(mspb)) = event.kind {
+      ms_per_beat = mspb.as_int();
     }
+  }
+  if ms_per_beat == 0 {
+    panic!("MIDI track 0 must include tempo information");
+  }
+  let ms_per_beat = ms_per_beat as f64;
 
-    r_pattern.push(track_pattern);
+  for event in &midi.tracks[TARGET_TRACK] {
+    play_offset += ((event.delta.as_int() as f64) * ms_per_beat)/(ticks_per_beat*1000.0*1000.0);
+
+    match event.kind {
+      EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
+        let pitch = pitch.as_int();
+        let relative_pitch = if pitch == prior_pitch {
+          prior_relative_pitch
+        } else if pitch > prior_pitch {
+          RelativePitch::High
+        } else {
+          RelativePitch::Low
+        };
+        r_pattern.push(PatternNote {
+          play_offset: play_offset,
+          pitch: pitch,
+          relative_pitch: relative_pitch,
+        });
+        prior_relative_pitch = relative_pitch;
+        prior_pitch = pitch;
+      },
+      _ => {} // Ignore
+    }
   }
 
   r_pattern
@@ -89,7 +97,7 @@ struct State {
   play_offset: Duration,
   relative_pitch_input: Option<RelativePitchInput>,
   song_duration: f64,
-  pattern: Vec<Vec<Option<PitchInfo>>>,
+  pattern: Vec<PatternNote>,
   sink: Sink,
 }
 
@@ -98,8 +106,8 @@ impl State {
 
     let midi_bytes = fs::read("music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
-    let song_duration = get_duration_seconds(&midi);
     let pattern = get_pattern(&midi);
+    let song_duration = pattern.last().unwrap().play_offset;
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
@@ -129,17 +137,18 @@ impl event::EventHandler for State {
     self.play_offset += self.dt;
 
     if let Some(input) = &self.relative_pitch_input {
-      let beats_per_second = (self.pattern[TARGET_TRACK].len() as f64)/self.song_duration;
+      let beats_per_second = (self.pattern.len() as f64)/self.song_duration; // FIXME
       let input_note_index: isize = (input.play_offset.as_secs_f64() * beats_per_second.round()) as isize;
       let mut nearest_note_index: Option<usize> = None;
       let mut nearest_note_offset_ms: f64 = 0.0;
-      for index_offset in -1..1 {
+      for index_offset in -10..10 {
         let idx: isize = input_note_index + index_offset;
         if idx < 0 { continue; }
         let idx: usize = idx.try_into().unwrap();
-        if idx >= self.pattern[TARGET_TRACK].len() { continue; }
-        if self.pattern[TARGET_TRACK][idx].is_none() { continue; }
+        if idx >= self.pattern.len() { continue; }
+        // TODO: Have min/max time delta, not just pattern index
 
+        // FIXME
         let this_offset_ms = (input.play_offset.as_secs_f64() - (idx as f64)/beats_per_second) * 1000.0;
         match nearest_note_index {
           None => {
@@ -156,7 +165,7 @@ impl event::EventHandler for State {
       }
 
       if let Some(idx) = nearest_note_index {
-        let relative_pitch_ok = input.relative_pitch == self.pattern[TARGET_TRACK][idx].as_ref().unwrap().relative_pitch;
+        let relative_pitch_ok = input.relative_pitch == self.pattern[idx].relative_pitch;
         println!("{:03} MATCH {:5}: {:+5.2}msec", idx, relative_pitch_ok, nearest_note_offset_ms);
       } else {
         println!("NO MATCH");
@@ -213,26 +222,23 @@ impl event::EventHandler for State {
       graphics::Color::from_rgb(0, 32, 192)
     ).unwrap();
 
-    let note_spacing = window.w/20.0;
-    let completion = (self.play_offset.as_secs_f64() / self.song_duration) as f32;
-    let completion_offset_x = completion * note_spacing * (self.pattern[TARGET_TRACK].len() as f32);
+    let spacing_per_second = window.w/4.0;
+    let completion_offset_x: f32 = (self.play_offset.as_secs_f64() as f32) * spacing_per_second;
 
-    for r in 0..self.pattern[TARGET_TRACK].len() {
-      let x = (r as f32) * note_spacing - completion_offset_x + now_line_x + now_line_width/2.0;
+    for pattern_note in &self.pattern {
+      // FIXME This could certainly be more efficient
+      let x = (pattern_note.play_offset as f32) * spacing_per_second - completion_offset_x + now_line_x + now_line_width/2.0;
       if x >= (0.0 - arrow_width) && x <= window.w { 
-        let cell = &self.pattern[TARGET_TRACK][r];
-        if let Some(pitch_info) = cell {
-          let mesh = match pitch_info.relative_pitch {
-            RelativePitch::High => &high_mesh,
-            RelativePitch::Low => &low_mesh,
-          };
-          let y = window.h - ((pitch_info.pitch as f32 - 64.0) * window.h/32.0 + 300.0);
-          graphics::draw(
-            ctx,
-            mesh,
-            graphics::DrawParam::default().dest(nalgebra::Point2::new(x, y))
-          ).unwrap();
-        }
+        let mesh = match pattern_note.relative_pitch {
+          RelativePitch::High => &high_mesh,
+          RelativePitch::Low => &low_mesh,
+        };
+        let y = window.h - ((pattern_note.pitch as f32 - 64.0) * window.h/32.0 + 300.0);
+        graphics::draw(
+          ctx,
+          mesh,
+          graphics::DrawParam::default().dest(nalgebra::Point2::new(x, y))
+        ).unwrap();
       }
     }
 
