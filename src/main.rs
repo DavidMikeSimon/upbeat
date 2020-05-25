@@ -4,6 +4,7 @@ extern crate rodio;
 extern crate midly;
 
 use std::{
+  convert::TryFrom,
   fs,
   io::BufReader,
   time::Duration
@@ -22,7 +23,7 @@ enum RelativePitch {
 }
 
 struct PatternNote {
-  play_offset: f64,
+  play_offset_ms: u32,
   pitch: u8,
   relative_pitch: RelativePitch,
 }
@@ -45,7 +46,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
 
   let mut prior_pitch = 0;
   let mut prior_relative_pitch = RelativePitch::High;
-  let mut play_offset = 0.0;
+  let mut play_offset_ms = 0;
 
   let mut ms_per_beat = 0;
   for event in &midi.tracks[0] { // Track 0 is the global timing track
@@ -59,7 +60,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   let ms_per_beat: f64 = ms_per_beat.into();
 
   for event in &midi.tracks[TARGET_TRACK] {
-    play_offset += ((event.delta.as_int() as f64) * ms_per_beat)/(ticks_per_beat*1000.0*1000.0);
+    play_offset_ms += (((event.delta.as_int() as f64) * ms_per_beat)/(ticks_per_beat*1000.0)) as u32;
 
     match event.kind {
       EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
@@ -72,7 +73,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
           RelativePitch::Low
         };
         r_pattern.push(PatternNote {
-          play_offset: play_offset,
+          play_offset_ms: play_offset_ms,
           pitch: pitch,
           relative_pitch: relative_pitch,
         });
@@ -88,12 +89,12 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
 
 struct RelativePitchInput {
   relative_pitch: RelativePitch,
-  play_offset: Duration
+  play_offset_ms: u32
 }
 
 struct State {
   dt: Duration,
-  play_offset: Duration,
+  play_offset_ms: u32,
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
   sink: Sink,
@@ -115,7 +116,7 @@ impl State {
 
     State {
       dt: Duration::default(),
-      play_offset: Duration::default(),
+      play_offset_ms: 0,
       relative_pitch_input: None,
       pattern: pattern,
       sink: sink
@@ -130,20 +131,17 @@ impl event::EventHandler for State {
 
     if self.sink.is_paused() { return Ok(()); }
 
-    self.play_offset += self.dt;
+    self.play_offset_ms += u32::try_from(self.dt.as_millis()).unwrap();
 
     if let Some(input) = &self.relative_pitch_input {
       let nearest_pattern_note = self.pattern
         .iter()
-        .min_by_key(|pn| {
-          let diff_sec = (pn.play_offset - input.play_offset.as_secs_f64()).abs();
-          (diff_sec * 1_000_000.0) as u32
-        })
+        .min_by_key(|pn| ((pn.play_offset_ms as i32) - (input.play_offset_ms as i32)).abs())
         .unwrap();
 
-      let nearest_note_offset = input.play_offset.as_secs_f64() - nearest_pattern_note.play_offset;
+      let nearest_note_offset_ms = input.play_offset_ms - nearest_pattern_note.play_offset_ms;
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
-      println!("MATCH {:5}: {:+5.2}msec", relative_pitch_ok, nearest_note_offset * 1000.0);
+      println!("MATCH {:5}: {:+3}msec", relative_pitch_ok, nearest_note_offset_ms);
 
       self.relative_pitch_input = None;
     }
@@ -197,11 +195,11 @@ impl event::EventHandler for State {
     ).unwrap();
 
     let spacing_per_second = window.w/4.0;
-    let completion_offset_x: f32 = (self.play_offset.as_secs_f64() as f32) * spacing_per_second;
+    let completion_offset_x: f32 = (self.play_offset_ms as f32)/1000.0 * spacing_per_second;
 
     for pattern_note in &self.pattern {
       // FIXME This could certainly be more efficient
-      let x = (pattern_note.play_offset as f32) * spacing_per_second - completion_offset_x + now_line_x + now_line_width/2.0;
+      let x = (pattern_note.play_offset_ms as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x + now_line_width/2.0;
       if x >= (0.0 - arrow_width) && x <= window.w { 
         let mesh = match pattern_note.relative_pitch {
           RelativePitch::High => &high_mesh,
@@ -241,11 +239,11 @@ impl event::EventHandler for State {
         keyboard::KeyCode::Space => self.sink.pause(),
         keyboard::KeyCode::Up => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::High,
-          play_offset: self.play_offset,
+          play_offset_ms: self.play_offset_ms,
         }),
         keyboard::KeyCode::Down => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::Low,
-          play_offset: self.play_offset,
+          play_offset_ms: self.play_offset_ms,
         }),
         _ => {}
       }
