@@ -139,7 +139,7 @@ impl event::EventHandler for State {
         .min_by_key(|pn| ((pn.play_offset_ms as i32) - (input.play_offset_ms as i32)).abs())
         .unwrap();
 
-      let nearest_note_offset_ms = input.play_offset_ms - nearest_pattern_note.play_offset_ms;
+      let nearest_note_offset_ms: i32 = i32::try_from(input.play_offset_ms).unwrap() - i32::try_from(nearest_pattern_note.play_offset_ms).unwrap();
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
       println!("MATCH {:5}: {:+3}msec", relative_pitch_ok, nearest_note_offset_ms);
 
