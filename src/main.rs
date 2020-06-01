@@ -36,31 +36,30 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
     _ => panic!("MIDI file must be in parallel (simultaneous tracks) format")
   }
 
-  let ticks_per_beat;
-  if let Timing::Metrical(tpb) = midi.header.timing {
-    ticks_per_beat = tpb.as_int();
-  } else {
-    panic!("MIDI timing must be metrical");
-  }
+  let ticks_per_beat = match midi.header.timing {
+    Timing::Metrical(n) => n.as_int(),
+    _ => panic!("MIDI timing must be metrical")
+  };
   let ticks_per_beat: f64 = ticks_per_beat.into();
 
   let mut prior_pitch = 0;
   let mut prior_relative_pitch = RelativePitch::High;
-  let mut play_offset_ms = 0;
+  let mut play_offset_ms = 0.0;
 
-  let mut ms_per_beat = 0;
+  let mut microseconds_per_beat = 0;
   for event in &midi.tracks[0] { // Track 0 is the global timing track
     if let EventKind::Meta(MetaMessage::Tempo(mspb)) = event.kind {
-      ms_per_beat = mspb.as_int();
+      microseconds_per_beat = mspb.as_int();
     }
   }
-  if ms_per_beat == 0 {
+  if microseconds_per_beat == 0 {
     panic!("MIDI track 0 must include tempo information");
   }
-  let ms_per_beat: f64 = ms_per_beat.into();
+  let ms_per_beat: f64 = (microseconds_per_beat as f64)/1000.0;
+  let ms_per_tick = ms_per_beat/ticks_per_beat;
 
   for event in &midi.tracks[TARGET_TRACK] {
-    play_offset_ms += (((event.delta.as_int() as f64) * ms_per_beat)/(ticks_per_beat*1000.0)) as u32;
+    play_offset_ms += (event.delta.as_int() as f64) * ms_per_tick;
 
     match event.kind {
       EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
@@ -73,7 +72,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
           RelativePitch::Low
         };
         r_pattern.push(PatternNote {
-          play_offset_ms: play_offset_ms,
+          play_offset_ms: play_offset_ms as u32,
           pitch: pitch,
           relative_pitch: relative_pitch,
         });
