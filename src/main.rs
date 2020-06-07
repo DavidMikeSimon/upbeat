@@ -161,26 +161,19 @@ impl event::EventHandler for State {
     let window = graphics::screen_coordinates(ctx);
 
     let now_line_x = 200.0;
-    let now_line_width = 2.0;
 
-    let line_mesh = graphics::Mesh::new_line(
+    graphics::draw(
       ctx,
-      &[
-        nalgebra::Point2::new(now_line_x + now_line_width/2.0, 0.0),
-        nalgebra::Point2::new(now_line_x + now_line_width/2.0, window.h)
-      ],
-      now_line_width,
-      graphics::BLACK
+      &self.assets.now_line,
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(now_line_x, 0.0))
     ).unwrap();
-
-    graphics::draw(ctx, &line_mesh, graphics::DrawParam::default()).unwrap();
 
     let spacing_per_second = window.w/4.0;
     let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32)/1000.0 * spacing_per_second;
 
     for pattern_note in &self.pattern {
       // FIXME This could certainly be more efficient
-      let x = (pattern_note.play_offset_ms as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x + now_line_width/2.0;
+      let x = (pattern_note.play_offset_ms as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
       if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
         let mesh = match pattern_note.relative_pitch {
           RelativePitch::High => &self.assets.up_arrow,
