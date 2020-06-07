@@ -191,6 +191,12 @@ impl event::EventHandler for State {
 
     graphics::draw(
       ctx,
+      &self.assets.monster,
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(600.0, 200.0)).scale(nalgebra::Vector2::new(0.5, 0.5))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
       &self.assets.music_bar,
       graphics::DrawParam::default().dest(nalgebra::Point2::new(self.assets.command_window_width, window.h - self.assets.music_bar_height))
     ).unwrap();

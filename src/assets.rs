@@ -6,6 +6,7 @@ pub struct Assets {
   pub bg: graphics::Image,
   pub char1: graphics::Image,
   pub char2: graphics::Image,
+  pub monster: graphics::Image,
 
   pub music_bar_height: f32,
   pub music_bar: graphics::Mesh,
@@ -31,6 +32,7 @@ impl Assets {
     let bg = graphics::Image::new(ctx, "/images/bg.jpg").unwrap();
     let char1 = graphics::Image::new(ctx, "/images/char1.png").unwrap();
     let char2 = graphics::Image::new(ctx, "/images/char2.png").unwrap();
+    let monster = graphics::Image::new(ctx, "/images/monster.png").unwrap();
 
     let window = graphics::screen_coordinates(ctx);
 
@@ -109,6 +111,7 @@ impl Assets {
       bg: bg,
       char1: char1,
       char2: char2,
+      monster: monster,
 
       music_bar_height: music_bar_height,
       music_bar: music_bar,
