@@ -3,6 +3,7 @@ extern crate nalgebra;
 extern crate rodio;
 extern crate midly;
 
+mod assets;
 mod counting_source;
 
 use std::{
@@ -17,6 +18,7 @@ use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
 use rodio::{Sink};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
 
+use assets::Assets;
 use counting_source::CountingSource;
 
 const TARGET_TRACK: usize = 10;
@@ -97,6 +99,7 @@ struct RelativePitchInput {
 }
 
 struct State {
+  assets: Assets,
   dt: Duration,
   play_offset_ms: Arc<AtomicU32>,
   relative_pitch_input: Option<RelativePitchInput>,
@@ -105,8 +108,7 @@ struct State {
 }
 
 impl State {
-  fn new() -> State {
-
+  fn new(ctx: &mut Context) -> State {
     let midi_bytes = fs::read("music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
     let pattern = get_pattern(&midi);
@@ -120,6 +122,7 @@ impl State {
     sink.append(source);
 
     State {
+      assets: Assets::new(ctx),
       dt: Duration::default(),
       play_offset_ms: play_offset_ms,
       relative_pitch_input: None,
@@ -172,41 +175,16 @@ impl event::EventHandler for State {
 
     graphics::draw(ctx, &line_mesh, graphics::DrawParam::default()).unwrap();
 
-    let arrow_width = 20.0;
-    let arrow_height = 10.0;
-
-    let high_mesh = graphics::Mesh::new_polygon(
-      ctx,
-      graphics::DrawMode::fill(),
-      &[
-        nalgebra::Point2::new(0.0, -arrow_height/2.0),
-        nalgebra::Point2::new(arrow_width/2.0, arrow_height/2.0),
-        nalgebra::Point2::new(-arrow_width/2.0, arrow_height/2.0),
-      ],
-      graphics::Color::from_rgb(0, 192, 32)
-    ).unwrap();
-
-    let low_mesh = graphics::Mesh::new_polygon(
-      ctx,
-      graphics::DrawMode::fill(),
-      &[
-        nalgebra::Point2::new(0.0, arrow_height/2.0),
-        nalgebra::Point2::new(-arrow_width/2.0, -arrow_height/2.0),
-        nalgebra::Point2::new(arrow_width/2.0, -arrow_height/2.0),
-      ],
-      graphics::Color::from_rgb(0, 32, 192)
-    ).unwrap();
-
     let spacing_per_second = window.w/4.0;
     let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32)/1000.0 * spacing_per_second;
 
     for pattern_note in &self.pattern {
       // FIXME This could certainly be more efficient
       let x = (pattern_note.play_offset_ms as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x + now_line_width/2.0;
-      if x >= (0.0 - arrow_width) && x <= window.w { 
+      if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
         let mesh = match pattern_note.relative_pitch {
-          RelativePitch::High => &high_mesh,
-          RelativePitch::Low => &low_mesh,
+          RelativePitch::High => &self.assets.up_arrow,
+          RelativePitch::Low => &self.assets.down_arrow,
         };
         let y = window.h - ((pattern_note.pitch as f32 - 64.0) * window.h/32.0 + 300.0);
         graphics::draw(
@@ -261,6 +239,6 @@ fn main() {
     .build()
     .unwrap();
 
-  let state = &mut State::new();
+  let state = &mut State::new(ctx);
   event::run(ctx, event_loop, state).unwrap();
 }
