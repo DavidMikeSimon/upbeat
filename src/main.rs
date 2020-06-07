@@ -112,14 +112,14 @@ struct State {
 
 impl State {
   fn new(ctx: &mut Context) -> State {
-    let midi_bytes = fs::read("music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
+    let midi_bytes = fs::read("resources/music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
     let pattern = get_pattern(&midi);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
 
-    let ogg_file = fs::File::open("music/weeppiko_musix_-_were_fighting_again.ogg").unwrap();
+    let ogg_file = fs::File::open("resources/music/weeppiko_musix_-_were_fighting_again.ogg").unwrap();
     let source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
     let (source, play_offset_ms) = CountingSource::new(source);
     sink.append(source);
@@ -288,11 +288,12 @@ impl event::EventHandler for State {
 }
 
 fn main() {
-  let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+  let mut resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
     path::PathBuf::from(manifest_dir)
   } else {
     path::PathBuf::from(".")
   };
+  resource_dir.push("resources");
 
   let c = conf::Conf::new();
   let (ref mut ctx, ref mut event_loop) = ggez::ContextBuilder::new("Upbeat", "David Simon")
