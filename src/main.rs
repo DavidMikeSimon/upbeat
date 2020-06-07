@@ -274,6 +274,16 @@ impl event::EventHandler for State {
       graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin/2.0, window.h - self.assets.music_bar_height + top_margin + font_size*0.5 + line_spacing*(self.command_cursor_index as f32)))
     ).unwrap();
 
+    if self.sink.is_paused() {
+      let text = graphics::Text::new(("Press Enter", self.assets.font, 75.0));
+      let x = (window.w - text.width(ctx) as f32)/2.0;
+      graphics::draw(
+        ctx,
+        &text,
+        graphics::DrawParam::default().dest(nalgebra::Point2::new(x, 250.0))
+      ).unwrap();
+    }
+
     graphics::present(ctx)
   }
 
@@ -289,14 +299,14 @@ impl event::EventHandler for State {
     if self.sink.is_paused() {
       match keycode {
         keyboard::KeyCode::Escape => event::quit(ctx),
-        keyboard::KeyCode::Space => self.sink.play(),
+        keyboard::KeyCode::Return => self.sink.play(),
         _ => {}
       }
     } else {
       // TODO: Is the play_offset here slightly off because of time elapsed since last update()?
       match keycode {
         keyboard::KeyCode::Escape => event::quit(ctx),
-        keyboard::KeyCode::Space => self.sink.pause(),
+        keyboard::KeyCode::Return => self.sink.pause(),
         keyboard::KeyCode::Up => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::High,
           play_offset_ms: self.play_offset_ms.load(Ordering::Relaxed),
