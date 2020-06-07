@@ -3,16 +3,21 @@ extern crate nalgebra;
 extern crate rodio;
 extern crate midly;
 
+mod counting_source;
+
 use std::{
   convert::TryFrom,
   fs,
   io::BufReader,
-  time::Duration
+  time::Duration,
+  sync::{Arc, atomic::{AtomicU32, Ordering}},
 };
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
 use rodio::{Sink};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
+
+use counting_source::CountingSource;
 
 const TARGET_TRACK: usize = 10;
 
@@ -93,7 +98,7 @@ struct RelativePitchInput {
 
 struct State {
   dt: Duration,
-  play_offset_ms: u32,
+  play_offset_ms: Arc<AtomicU32>,
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
   sink: Sink,
@@ -111,11 +116,12 @@ impl State {
 
     let ogg_file = fs::File::open("music/weeppiko_musix_-_were_fighting_again.ogg").unwrap();
     let source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
+    let (source, play_offset_ms) = CountingSource::new(source);
     sink.append(source);
 
     State {
       dt: Duration::default(),
-      play_offset_ms: 0,
+      play_offset_ms: play_offset_ms,
       relative_pitch_input: None,
       pattern: pattern,
       sink: sink
@@ -129,8 +135,6 @@ impl event::EventHandler for State {
     self.dt = timer::delta(ctx);
 
     if self.sink.is_paused() { return Ok(()); }
-
-    self.play_offset_ms += u32::try_from(self.dt.as_millis()).unwrap();
 
     if let Some(input) = &self.relative_pitch_input {
       let nearest_pattern_note = self.pattern
@@ -194,7 +198,7 @@ impl event::EventHandler for State {
     ).unwrap();
 
     let spacing_per_second = window.w/4.0;
-    let completion_offset_x: f32 = (self.play_offset_ms as f32)/1000.0 * spacing_per_second;
+    let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32)/1000.0 * spacing_per_second;
 
     for pattern_note in &self.pattern {
       // FIXME This could certainly be more efficient
@@ -238,11 +242,11 @@ impl event::EventHandler for State {
         keyboard::KeyCode::Space => self.sink.pause(),
         keyboard::KeyCode::Up => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::High,
-          play_offset_ms: self.play_offset_ms,
+          play_offset_ms: self.play_offset_ms.load(Ordering::Relaxed),
         }),
         keyboard::KeyCode::Down => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::Low,
-          play_offset_ms: self.play_offset_ms,
+          play_offset_ms: self.play_offset_ms.load(Ordering::Relaxed),
         }),
         _ => {}
       }
