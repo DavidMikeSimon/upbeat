@@ -173,6 +173,12 @@ impl event::EventHandler for State {
 
     graphics::draw(
       ctx,
+      &self.assets.bg,
+      graphics::DrawParam::default()
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
       &self.assets.music_bar,
       graphics::DrawParam::default().dest(nalgebra::Point2::new(self.assets.command_window_width, window.h - self.assets.music_bar_height))
     ).unwrap();
