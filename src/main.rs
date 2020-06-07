@@ -8,8 +8,10 @@ mod counting_source;
 
 use std::{
   convert::TryFrom,
+  env,
   fs,
   io::BufReader,
+  path,
   time::Duration,
   sync::{Arc, atomic::{AtomicU32, Ordering}},
 };
@@ -78,7 +80,6 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
         } else {
           RelativePitch::Low
         };
-        dbg!(pitch);
         r_pattern.push(PatternNote {
           play_offset_ms: play_offset_ms as u32,
           pitch: pitch,
@@ -205,6 +206,35 @@ impl event::EventHandler for State {
       graphics::DrawParam::default().dest(nalgebra::Point2::new(0.0, window.h - self.assets.music_bar_height))
     ).unwrap();
 
+    let left_margin = 50.0;
+    let top_margin = 5.0;
+    let font_size = 55.0;
+    let line_spacing = 45.0;
+
+    graphics::draw(
+      ctx,
+      &graphics::Text::new(("Strike", self.assets.font, font_size)),
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
+      &graphics::Text::new(("Hold", self.assets.font, font_size)),
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
+      &graphics::Text::new(("Magic", self.assets.font, font_size)),
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing*2.0))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
+      &graphics::Text::new(("Items", self.assets.font, font_size)),
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing*3.0))
+    ).unwrap();
+
     graphics::present(ctx)
   }
 
@@ -243,9 +273,16 @@ impl event::EventHandler for State {
 }
 
 fn main() {
+  let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+    path::PathBuf::from(manifest_dir)
+  } else {
+    path::PathBuf::from(".")
+  };
+
   let c = conf::Conf::new();
   let (ref mut ctx, ref mut event_loop) = ggez::ContextBuilder::new("Upbeat", "David Simon")
     .conf(c)
+    .add_resource_path(resource_dir)
     .build()
     .unwrap();
 

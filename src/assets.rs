@@ -1,6 +1,8 @@
 use ggez::{graphics, Context};
 
 pub struct Assets {
+  pub font: graphics::Font,
+
   pub music_bar_height: f32,
   pub music_bar: graphics::Mesh,
 
@@ -18,6 +20,8 @@ pub struct Assets {
 
 impl Assets {
   pub fn new(ctx: &mut Context) -> Assets {
+    let font = graphics::Font::new(ctx, "/fonts/Catamaran/Catamaran-Regular.ttf").unwrap();
+
     let window = graphics::screen_coordinates(ctx);
 
     let music_bar_height = 200.0;
@@ -77,6 +81,8 @@ impl Assets {
     ).unwrap();
 
     Assets {
+      font: font,
+
       music_bar_height: music_bar_height,
       music_bar: music_bar,
 
