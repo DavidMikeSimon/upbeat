@@ -17,13 +17,14 @@ use std::{
 };
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
-use rodio::{Sink};
+use rodio::{Sink, Source};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
 
 use assets::Assets;
 use counting_source::CountingSource;
 
 const TARGET_TRACK: usize = 10;
+const LEAD_IN_MSEC: u32 = 4000; // TODO: Actual duration seems to be about 1/4th this?
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
@@ -105,6 +106,7 @@ struct State {
   command_cursor_index: u8,
   dt: Duration,
   play_offset_ms: Arc<AtomicU32>,
+  lead_in_offset_ms: Arc<AtomicU32>,
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
   sink: Sink,
@@ -120,15 +122,20 @@ impl State {
     sink.pause();
 
     let ogg_file = fs::File::open("resources/music/weeppiko_musix_-_were_fighting_again.ogg").unwrap();
-    let source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
-    let (source, play_offset_ms) = CountingSource::new(source);
-    sink.append(source);
+    let music_source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
+    let lead_in_source = rodio::source::Zero::<f32>::new(music_source.channels(), music_source.sample_rate()).take_duration(Duration::from_millis(LEAD_IN_MSEC.into()));
+
+    let (music_source, play_offset_ms) = CountingSource::new(music_source);
+    let (lead_in_source, lead_in_offset_ms) = CountingSource::new(lead_in_source);
+    sink.append(lead_in_source);
+    sink.append(music_source);
 
     State {
       assets: Assets::new(ctx),
       command_cursor_index: 0,
       dt: Duration::default(),
       play_offset_ms: play_offset_ms,
+      lead_in_offset_ms: lead_in_offset_ms,
       relative_pitch_input: None,
       pattern: pattern,
       sink: sink
@@ -213,7 +220,8 @@ impl event::EventHandler for State {
     let music_bar_min_pitch = 55;
     let music_bar_max_pitch = 75;
 
-    let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32)/1000.0 * spacing_per_second;
+    // FIXME Shouldn't have to divide LEAD_IN_MSEC by 4...
+    let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32 - (LEAD_IN_MSEC/4 - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
 
     // FIXME This could certainly be more efficient by remembering where it left off last time
     for pattern_note in &self.pattern {
