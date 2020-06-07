@@ -102,6 +102,7 @@ struct RelativePitchInput {
 
 struct State {
   assets: Assets,
+  command_cursor_index: u8,
   dt: Duration,
   play_offset_ms: Arc<AtomicU32>,
   relative_pitch_input: Option<RelativePitchInput>,
@@ -125,6 +126,7 @@ impl State {
 
     State {
       assets: Assets::new(ctx),
+      command_cursor_index: 0,
       dt: Duration::default(),
       play_offset_ms: play_offset_ms,
       relative_pitch_input: None,
@@ -150,6 +152,13 @@ impl event::EventHandler for State {
       let nearest_note_offset_ms: i32 = i32::try_from(input.play_offset_ms).unwrap() - i32::try_from(nearest_pattern_note.play_offset_ms).unwrap();
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
       println!("MATCH {:5}: {:+3}msec", relative_pitch_ok, nearest_note_offset_ms);
+
+      self.command_cursor_index = match (input.relative_pitch, self.command_cursor_index) {
+        (RelativePitch::High, 0) => 3,
+        (RelativePitch::High, _) => self.command_cursor_index - 1,
+        (RelativePitch::Low, 3) => 0,
+        (RelativePitch::Low, _) => self.command_cursor_index + 1,
+      };
 
       self.relative_pitch_input = None;
     }
@@ -233,6 +242,12 @@ impl event::EventHandler for State {
       ctx,
       &graphics::Text::new(("Items", self.assets.font, font_size)),
       graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing*3.0))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
+      &self.assets.command_cursor,
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin/2.0, window.h - self.assets.music_bar_height + top_margin + font_size*0.5 + line_spacing*(self.command_cursor_index as f32)))
     ).unwrap();
 
     graphics::present(ctx)

@@ -9,6 +9,8 @@ pub struct Assets {
   pub command_window_width: f32,
   pub command_window: graphics::Mesh,
 
+  pub command_cursor: graphics::Mesh,
+
   pub now_line_width: f32,
   pub now_line_x_offset: f32,
   pub now_line: graphics::Mesh,
@@ -80,6 +82,19 @@ impl Assets {
       graphics::Color::from_rgb(0, 32, 192)
     ).unwrap();
 
+    let command_cursor_width = 30.0;
+    let command_cursor = graphics::Mesh::new_polygon(
+      ctx,
+      graphics::DrawMode::fill(),
+      &[
+        nalgebra::Point2::new(0.0, -command_cursor_width/2.0),
+        nalgebra::Point2::new(command_cursor_width/2.0, 0.0),
+        nalgebra::Point2::new(0.0, command_cursor_width/2.0),
+        nalgebra::Point2::new(-command_cursor_width/2.0, 0.0),
+      ],
+      graphics::Color::from_rgb(192, 32, 192)
+    ).unwrap();
+
     Assets {
       font: font,
 
@@ -88,6 +103,8 @@ impl Assets {
 
       command_window_width: command_window_width,
       command_window: command_window,
+
+      command_cursor: command_cursor,
 
       now_line_width: now_line_width,
       now_line_x_offset: now_line_x_offset,
