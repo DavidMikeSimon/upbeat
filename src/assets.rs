@@ -4,6 +4,8 @@ pub struct Assets {
   pub font: graphics::Font,
 
   pub bg: graphics::Image,
+  pub char1: graphics::Image,
+  pub char2: graphics::Image,
 
   pub music_bar_height: f32,
   pub music_bar: graphics::Mesh,
@@ -27,6 +29,8 @@ impl Assets {
     let font = graphics::Font::new(ctx, "/fonts/Catamaran/Catamaran-Regular.ttf").unwrap();
 
     let bg = graphics::Image::new(ctx, "/images/bg.jpg").unwrap();
+    let char1 = graphics::Image::new(ctx, "/images/char1.png").unwrap();
+    let char2 = graphics::Image::new(ctx, "/images/char2.png").unwrap();
 
     let window = graphics::screen_coordinates(ctx);
 
@@ -103,6 +107,8 @@ impl Assets {
       font: font,
 
       bg: bg,
+      char1: char1,
+      char2: char2,
 
       music_bar_height: music_bar_height,
       music_bar: music_bar,
