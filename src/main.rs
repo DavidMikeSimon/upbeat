@@ -78,6 +78,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
         } else {
           RelativePitch::Low
         };
+        dbg!(pitch);
         r_pattern.push(PatternNote {
           play_offset_ms: play_offset_ms as u32,
           pitch: pitch,
@@ -160,26 +161,36 @@ impl event::EventHandler for State {
 
     let window = graphics::screen_coordinates(ctx);
 
-    let now_line_x = 200.0;
+    graphics::draw(
+      ctx,
+      &self.assets.music_bar,
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(self.assets.command_window_width, window.h - self.assets.music_bar_height))
+    ).unwrap();
+
+    let now_line_x = self.assets.command_window_width + self.assets.now_line_x_offset;
 
     graphics::draw(
       ctx,
       &self.assets.now_line,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(now_line_x, 0.0))
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(now_line_x, window.h - self.assets.music_bar_height))
     ).unwrap();
 
-    let spacing_per_second = window.w/4.0;
+    let spacing_per_second = window.w/5.0;
+    let music_bar_min_pitch = 55;
+    let music_bar_max_pitch = 75;
+
     let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32)/1000.0 * spacing_per_second;
 
+    // FIXME This could certainly be more efficient by remembering where it left off last time
     for pattern_note in &self.pattern {
-      // FIXME This could certainly be more efficient
       let x = (pattern_note.play_offset_ms as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
       if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
         let mesh = match pattern_note.relative_pitch {
           RelativePitch::High => &self.assets.up_arrow,
           RelativePitch::Low => &self.assets.down_arrow,
         };
-        let y = window.h - ((pattern_note.pitch as f32 - 64.0) * window.h/32.0 + 300.0);
+        let pitch_amt = ((pattern_note.pitch - music_bar_min_pitch) as f32)/((music_bar_max_pitch - music_bar_min_pitch) as f32);
+        let y = window.h - self.assets.music_bar_height*pitch_amt;
         graphics::draw(
           ctx,
           mesh,
@@ -187,6 +198,12 @@ impl event::EventHandler for State {
         ).unwrap();
       }
     }
+
+    graphics::draw(
+      ctx,
+      &self.assets.command_window,
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(0.0, window.h - self.assets.music_bar_height))
+    ).unwrap();
 
     graphics::present(ctx)
   }
