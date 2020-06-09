@@ -29,7 +29,7 @@ impl Assets {
   pub fn new(ctx: &mut Context) -> Assets {
     let font = graphics::Font::new(ctx, "/fonts/Catamaran/Catamaran-Regular.ttf").unwrap();
 
-    let bg = graphics::Image::new(ctx, "/images/bg.jpg").unwrap();
+    let bg = graphics::Image::new(ctx, "/images/bg.png").unwrap();
     let char1 = graphics::Image::new(ctx, "/images/char1.png").unwrap();
     let char2 = graphics::Image::new(ctx, "/images/char2.png").unwrap();
     let monster = graphics::Image::new(ctx, "/images/monster.png").unwrap();
@@ -43,14 +43,14 @@ impl Assets {
       ctx,
       graphics::DrawMode::fill(),
       graphics::Rect::new(0.0, 0.0, window.w - command_window_width, music_bar_height),
-      graphics::Color::from_rgb(210, 210, 210)
+      graphics::Color::from_rgba(210, 210, 210, 128)
     ).unwrap();
 
     let command_window = graphics::Mesh::new_rectangle(
       ctx,
       graphics::DrawMode::fill(),
       graphics::Rect::new(0.0, 0.0, command_window_width, music_bar_height),
-      graphics::Color::from_rgb(192, 192, 192)
+      graphics::Color::from_rgba(192, 192, 192, 128)
     ).unwrap();
 
     let now_line_width = 2.0;

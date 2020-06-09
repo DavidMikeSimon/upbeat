@@ -187,19 +187,19 @@ impl event::EventHandler for State {
     graphics::draw(
       ctx,
       &self.assets.char1,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(50.0, 30.0)).scale(nalgebra::Vector2::new(0.25, 0.25))
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(202.0, 35.0))
     ).unwrap();
 
     graphics::draw(
       ctx,
       &self.assets.char2,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(50.0, 220.0)).scale(nalgebra::Vector2::new(0.5, 0.5))
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(411.0, 120.0))
     ).unwrap();
 
     graphics::draw(
       ctx,
       &self.assets.monster,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(600.0, 200.0)).scale(nalgebra::Vector2::new(0.5, 0.5))
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(644.0, 85.0))
     ).unwrap();
 
     graphics::draw(
@@ -337,9 +337,11 @@ fn main() {
   };
   resource_dir.push("resources");
 
-  let c = conf::Conf::new();
+  let conf = conf::Conf::new()
+    .window_mode(conf::WindowMode::default().dimensions(1280.0, 720.0));
+
   let (ref mut ctx, ref mut event_loop) = ggez::ContextBuilder::new("Upbeat", "David Simon")
-    .conf(c)
+    .conf(conf)
     .add_resource_path(resource_dir)
     .build()
     .unwrap();
