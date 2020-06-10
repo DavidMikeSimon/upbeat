@@ -110,6 +110,7 @@ struct State {
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
   sink: Sink,
+  char2_idle_frame: usize
 }
 
 impl State {
@@ -138,7 +139,8 @@ impl State {
       lead_in_offset_ms: lead_in_offset_ms,
       relative_pitch_input: None,
       pattern: pattern,
-      sink: sink
+      sink: sink,
+      char2_idle_frame: 0
     }
   }
 }
@@ -147,6 +149,11 @@ impl event::EventHandler for State {
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::set_window_title(ctx, "Upbeat");
     self.dt = timer::delta(ctx);
+
+    // FIXME: This will break as soon as we want to animate more than one thing
+    while timer::check_update_time(ctx, 8) {
+      self.char2_idle_frame = (self.char2_idle_frame + 1) % self.assets.char2_idle.len();
+    }
 
     if self.sink.is_paused() { return Ok(()); }
 
@@ -184,16 +191,18 @@ impl event::EventHandler for State {
       graphics::DrawParam::default()
     ).unwrap();
 
-    graphics::draw(
-      ctx,
-      &self.assets.char1,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(202.0, 35.0))
-    ).unwrap();
+    /*
+     * graphics::draw(
+     *   ctx,
+     *   &self.assets.char1,
+     *   graphics::DrawParam::default().dest(nalgebra::Point2::new(202.0, 35.0))
+     * ).unwrap();
+     */
 
     graphics::draw(
       ctx,
-      &self.assets.char2,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(411.0, 120.0))
+      &self.assets.char2_idle[self.char2_idle_frame],
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(390.0, 110.0))
     ).unwrap();
 
     graphics::draw(
