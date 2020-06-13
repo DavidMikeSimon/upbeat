@@ -1,9 +1,7 @@
-Work in progress
+## Work in progress
 
-## Included music
+Yep.
 
-[Weeppiko Musix - We're Fighting Again (License: CC-BY-SA)](https://modarchive.org/module.php?186502)
+## License stuff
 
-## Included fonts
-
-[Cataraman (License: OFL)](https://fonts.google.com/specimen/Catamaran)
+Find license and copyright details in [LICENSE.md](LICENSE.md).
