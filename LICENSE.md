@@ -4,9 +4,9 @@ The contents of this repository are copyright 2020 David Simon and Pip Simon, un
 otherwise noted. Redistribution and modification are only allowed under the terms
 of these licenses:
 
-Images and animations: [CC-BY-NC-ND 4.0](licenses/CC-BY-NC-ND)
+Images and animations: This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License. A copy of this license is included in the file [licenses/CC-BY-NC-ND](licenses/CC-BY-NC-ND).
 
-Code, documentation, and everything else: [MIT](licenses/MIT)
+Code, documentation, and everything else: This work is licensed under the MIT license. A copy of this license is included in the file [licenses/MIT](licenses/MIT).
 
 # Licensing for included work
 
