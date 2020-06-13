@@ -15,7 +15,8 @@ These have copyright held by others and are restricted by their own licenses:
 
 ## Music
 
-[Weeppiko Musix - We're Fighting Again (License: CC-BY-SA)](https://modarchive.org/module.php?186502)
+[Weeppiko Musix - We're Fighting Again (License: CC-BY-SA 3.0)](https://modarchive.org/module.php?186502)
+[Goluigi - Neboke (License: CC-BY-NC-SA 3.0)](https://battleofthebits.org/arena/Entry/neboke/25633)
 
 ## Fonts
 
