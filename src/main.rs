@@ -35,7 +35,7 @@ enum RelativePitch {
 }
 
 struct PatternNote {
-  play_offset_ms: u32,
+  time: u32,
   pitch: u8,
   relative_pitch: RelativePitch,
 }
@@ -66,25 +66,25 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
 
   midi.tracks[TARGET_TRACK]
     .iter()
-    .scan(0.0, |play_offset_ms, &event| {
-      *play_offset_ms = *play_offset_ms + event.delta.as_int() as f64 * ms_per_tick;
+    .scan(0.0, |time, &event| {
+      *time = *time + event.delta.as_int() as f64 * ms_per_tick;
 
       match event.kind {
         EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
-          Some(Some((play_offset_ms.clone(), pitch.as_int())))
+          Some(Some((time.clone(), pitch.as_int())))
         },
         _ => Some(None) // Ignore events other than NoteOn
       }
     })
     .flatten()
-    .group_by(|(play_offset_ms, _)| play_offset_ms.clone())
+    .group_by(|(time, _)| time.clone())
     .into_iter()
-    .map(|(play_offset_ms, pitches)| {
+    .map(|(time, pitches)| {
       let pitches: Vec<(f64, u8)> = pitches.collect();
       let average_pitch: f64 = pitches.iter().map(|(_, p)| *p as f64).sum::<f64>() / pitches.len() as f64;
-      (play_offset_ms, average_pitch.round() as u8)
+      (time, average_pitch.round() as u8)
     })
-    .scan((0, RelativePitch::High), |(prior_pitch, prior_relative_pitch), (play_offset_ms, pitch)| {
+    .scan((0, RelativePitch::High), |(prior_pitch, prior_relative_pitch), (time, pitch)| {
       let relative_pitch = if pitch == *prior_pitch {
         *prior_relative_pitch
       } else if pitch > *prior_pitch {
@@ -93,7 +93,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
         RelativePitch::Low
       };
       let pn = PatternNote {
-        play_offset_ms: play_offset_ms as u32,
+        time: time as u32,
         pitch: pitch,
         relative_pitch: relative_pitch,
       };
@@ -106,7 +106,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
 
 struct RelativePitchInput {
   relative_pitch: RelativePitch,
-  play_offset_ms: u32
+  time: u32
 }
 
 struct HeroState {
@@ -117,16 +117,25 @@ struct HeroState {
 
 struct EnemyState {
   position: nalgebra::Point2<f32>,
-  next_move_play_offset_ms: u32,
+  next_move_time: u32,
   ms_between_moves: u32,
   attack_power: u32
+}
+
+enum CombatActionType {
+  AttackHero
+}
+
+struct CombatAction {
+  action_type: CombatActionType,
+  resolve_at: u32
 }
 
 struct State {
   assets: Assets,
   command_cursor_index: u8,
   dt: Duration,
-  play_offset_ms: Arc<AtomicU32>,
+  time: Arc<AtomicU32>,
   lead_in_offset_ms: Arc<AtomicU32>,
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
@@ -134,6 +143,7 @@ struct State {
   char2_idle_frame: usize,
   heroes: Vec<HeroState>,
   enemies: Vec<EnemyState>,
+  actions: Vec<CombatAction>
 }
 
 impl State {
@@ -149,7 +159,7 @@ impl State {
     let music_source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
     let lead_in_source = rodio::source::Zero::<f32>::new(music_source.channels(), music_source.sample_rate()).take_duration(Duration::from_millis(LEAD_IN_MSEC.into()));
 
-    let (music_source, play_offset_ms) = CountingSource::new(music_source);
+    let (music_source, time) = CountingSource::new(music_source);
     let (lead_in_source, lead_in_offset_ms) = CountingSource::new(lead_in_source);
     sink.append(lead_in_source);
     sink.append(music_source);
@@ -158,7 +168,7 @@ impl State {
       assets: Assets::new(ctx),
       command_cursor_index: 0,
       dt: Duration::default(),
-      play_offset_ms: play_offset_ms,
+      time: time,
       lead_in_offset_ms: lead_in_offset_ms,
       relative_pitch_input: None,
       pattern: pattern,
@@ -171,11 +181,12 @@ impl State {
       enemies: vec![
         EnemyState {
           position: nalgebra::Point2::new(644.0, 85.0),
-          next_move_play_offset_ms: 2000,
+          next_move_time: 2000,
           ms_between_moves: 2000,
           attack_power: 50
         },
-      ]
+      ],
+      actions: Vec::new()
     }
   }
 }
@@ -187,24 +198,43 @@ impl event::EventHandler for State {
 
     if self.sink.is_paused() { return Ok(()); }
 
-    let play_offset_ms = self.play_offset_ms.load(Ordering::Relaxed);
+    let time = self.time.load(Ordering::Relaxed);
 
     for enemy in &mut self.enemies {
-      while enemy.next_move_play_offset_ms < play_offset_ms {
-        if self.heroes[0].hp > 0 {
-          self.heroes[0].hp -= std::cmp::min(enemy.attack_power, self.heroes[0].hp);
-        }
-        enemy.next_move_play_offset_ms += enemy.ms_between_moves;
+      while enemy.next_move_time < time {
+        self.actions.push(CombatAction{
+          action_type: CombatActionType::AttackHero,
+          resolve_at: time + 400,
+        });
+        enemy.next_move_time += enemy.ms_between_moves;
       }
+    }
+
+    let mut action_indexes_to_delete: Vec<usize> = Vec::new();
+    for (idx, action) in self.actions.iter().enumerate() {
+      if action.resolve_at < time {
+        action_indexes_to_delete.push(idx);
+        match action.action_type {
+          CombatActionType::AttackHero => {
+            if self.heroes[0].hp > 0 {
+              self.heroes[0].hp -= std::cmp::min(self.enemies[0].attack_power, self.heroes[0].hp);
+            }
+          }
+        }
+      }
+    }
+
+    for &idx in action_indexes_to_delete.iter().rev() {
+      self.actions.remove(idx);
     }
 
     if let Some(input) = &self.relative_pitch_input {
       let nearest_pattern_note = self.pattern
         .iter()
-        .min_by_key(|pn| ((pn.play_offset_ms as i32) - (input.play_offset_ms as i32)).abs())
+        .min_by_key(|pn| ((pn.time as i32) - (input.time as i32)).abs())
         .unwrap();
 
-      let nearest_note_offset_ms: i32 = i32::try_from(input.play_offset_ms).unwrap() - i32::try_from(nearest_pattern_note.play_offset_ms).unwrap();
+      let nearest_note_offset_ms: i32 = i32::try_from(input.time).unwrap() - i32::try_from(nearest_pattern_note.time).unwrap();
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
       println!("MATCH {:5}: {:+3}msec", relative_pitch_ok, nearest_note_offset_ms);
 
@@ -254,6 +284,18 @@ impl event::EventHandler for State {
       ).unwrap();
     }
 
+    for action in &self.actions {
+      match action.action_type {
+        CombatActionType::AttackHero => {
+          graphics::draw(
+            ctx,
+            &self.assets.attack_effect,
+            graphics::DrawParam::default().dest(self.heroes[0].position + nalgebra::Vector2::new(90.0, 180.0))
+          ).unwrap();
+        }
+      }
+    }
+
     graphics::draw(
       ctx,
       &self.assets.music_bar,
@@ -273,11 +315,11 @@ impl event::EventHandler for State {
     let music_bar_max_pitch = 75;
 
     // FIXME Shouldn't have to divide LEAD_IN_MSEC by 4...
-    let completion_offset_x: f32 = (self.play_offset_ms.load(Ordering::Relaxed) as f32 - (LEAD_IN_MSEC/4 - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
+    let completion_offset_x: f32 = (self.time.load(Ordering::Relaxed) as f32 - (LEAD_IN_MSEC/4 - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
 
     // FIXME This could certainly be more efficient by remembering where it left off last time
     for pattern_note in &self.pattern {
-      let x = (pattern_note.play_offset_ms as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
+      let x = (pattern_note.time as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
       if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
         let mesh = match pattern_note.relative_pitch {
           RelativePitch::High => &self.assets.up_arrow,
@@ -369,11 +411,11 @@ impl event::EventHandler for State {
         keyboard::KeyCode::Return => self.sink.pause(),
         keyboard::KeyCode::Up => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::High,
-          play_offset_ms: self.play_offset_ms.load(Ordering::Relaxed),
+          time: self.time.load(Ordering::Relaxed),
         }),
         keyboard::KeyCode::Down => self.relative_pitch_input = Some(RelativePitchInput {
           relative_pitch: RelativePitch::Low,
-          play_offset_ms: self.play_offset_ms.load(Ordering::Relaxed),
+          time: self.time.load(Ordering::Relaxed),
         }),
         _ => {}
       }
