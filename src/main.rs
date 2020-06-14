@@ -109,6 +109,19 @@ struct RelativePitchInput {
   play_offset_ms: u32
 }
 
+struct HeroState {
+  position: nalgebra::Point2<f32>,
+  hp: u32,
+  max_hp: u32
+}
+
+struct EnemyState {
+  position: nalgebra::Point2<f32>,
+  next_move_play_offset_ms: u32,
+  ms_between_moves: u32,
+  attack_power: u32
+}
+
 struct State {
   assets: Assets,
   command_cursor_index: u8,
@@ -118,7 +131,9 @@ struct State {
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
   sink: Sink,
-  char2_idle_frame: usize
+  char2_idle_frame: usize,
+  heroes: Vec<HeroState>,
+  enemies: Vec<EnemyState>,
 }
 
 impl State {
@@ -148,7 +163,19 @@ impl State {
       relative_pitch_input: None,
       pattern: pattern,
       sink: sink,
-      char2_idle_frame: 0
+      char2_idle_frame: 0,
+      heroes: vec![
+        HeroState { position: nalgebra::Point2::new(180.0, 35.0), hp: 180, max_hp: 180 },
+        HeroState { position: nalgebra::Point2::new(350.0, 110.0), hp: 220, max_hp: 220 },
+      ],
+      enemies: vec![
+        EnemyState {
+          position: nalgebra::Point2::new(644.0, 85.0),
+          next_move_play_offset_ms: 2000,
+          ms_between_moves: 2000,
+          attack_power: 50
+        },
+      ]
     }
   }
 }
@@ -158,12 +185,18 @@ impl event::EventHandler for State {
     graphics::set_window_title(ctx, "Upbeat");
     self.dt = timer::delta(ctx);
 
-    // FIXME: This will break as soon as we want to animate more than one thing
-    while timer::check_update_time(ctx, 8) {
-      self.char2_idle_frame = (self.char2_idle_frame + 1) % self.assets.char2_idle.len();
-    }
-
     if self.sink.is_paused() { return Ok(()); }
+
+    let play_offset_ms = self.play_offset_ms.load(Ordering::Relaxed);
+
+    for enemy in &mut self.enemies {
+      while enemy.next_move_play_offset_ms < play_offset_ms {
+        if self.heroes[0].hp > 0 {
+          self.heroes[0].hp -= std::cmp::min(enemy.attack_power, self.heroes[0].hp);
+        }
+        enemy.next_move_play_offset_ms += enemy.ms_between_moves;
+      }
+    }
 
     if let Some(input) = &self.relative_pitch_input {
       let nearest_pattern_note = self.pattern
@@ -199,25 +232,27 @@ impl event::EventHandler for State {
       graphics::DrawParam::default()
     ).unwrap();
 
-    /*
-     * graphics::draw(
-     *   ctx,
-     *   &self.assets.char1,
-     *   graphics::DrawParam::default().dest(nalgebra::Point2::new(202.0, 35.0))
-     * ).unwrap();
-     */
+    for hero in &self.heroes {
+      graphics::draw(
+        ctx,
+        &self.assets.char2_idle[self.char2_idle_frame],
+        graphics::DrawParam::default().dest(hero.position)
+      ).unwrap();
 
-    graphics::draw(
-      ctx,
-      &self.assets.char2_idle[self.char2_idle_frame],
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(390.0, 110.0))
-    ).unwrap();
+      graphics::draw(
+        ctx,
+        &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 35.0)),
+        graphics::DrawParam::default().dest(hero.position + nalgebra::Vector2::new(20.0, -20.0))
+      ).unwrap();
+    }
 
-    graphics::draw(
-      ctx,
-      &self.assets.monster,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(644.0, 85.0))
-    ).unwrap();
+    for enemy in &self.enemies {
+      graphics::draw(
+        ctx,
+        &self.assets.monster,
+        graphics::DrawParam::default().dest(enemy.position)
+      ).unwrap();
+    }
 
     graphics::draw(
       ctx,
