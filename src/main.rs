@@ -128,7 +128,9 @@ enum CombatActionType {
 
 struct CombatAction {
   action_type: CombatActionType,
-  resolve_at: u32
+  resolve_at: u32,
+  resolved: bool,
+  remove_at: u32
 }
 
 struct State {
@@ -202,18 +204,22 @@ impl event::EventHandler for State {
 
     for enemy in &mut self.enemies {
       while enemy.next_move_time < time {
-        self.actions.push(CombatAction{
-          action_type: CombatActionType::AttackHero,
-          resolve_at: time + 400,
-        });
+        if self.heroes[0].hp > 0 {
+          self.actions.push(CombatAction{
+            action_type: CombatActionType::AttackHero,
+            resolve_at: time + 400,
+            resolved: false,
+            remove_at: time + 800
+          });
+        }
         enemy.next_move_time += enemy.ms_between_moves;
       }
     }
 
     let mut action_indexes_to_delete: Vec<usize> = Vec::new();
-    for (idx, action) in self.actions.iter().enumerate() {
-      if action.resolve_at < time {
-        action_indexes_to_delete.push(idx);
+    for action in &mut self.actions {
+      if !action.resolved && action.resolve_at < time {
+        action.resolved = true;
         match action.action_type {
           CombatActionType::AttackHero => {
             if self.heroes[0].hp > 0 {
@@ -221,6 +227,12 @@ impl event::EventHandler for State {
             }
           }
         }
+      }
+    }
+
+    for (idx, action) in self.actions.iter().enumerate() {
+      if action.remove_at < time {
+        action_indexes_to_delete.push(idx);
       }
     }
 
@@ -255,6 +267,7 @@ impl event::EventHandler for State {
     graphics::clear(ctx, graphics::WHITE);
 
     let window = graphics::screen_coordinates(ctx);
+    let time = self.time.load(Ordering::Relaxed);
 
     graphics::draw(
       ctx,
@@ -287,11 +300,28 @@ impl event::EventHandler for State {
     for action in &self.actions {
       match action.action_type {
         CombatActionType::AttackHero => {
-          graphics::draw(
-            ctx,
-            &self.assets.attack_effect,
-            graphics::DrawParam::default().dest(self.heroes[0].position + nalgebra::Vector2::new(90.0, 180.0))
-          ).unwrap();
+          if action.resolved {
+            graphics::draw(
+              ctx,
+              &self.assets.after_attack_effect,
+              graphics::DrawParam::default().dest(self.heroes[0].position + nalgebra::Vector2::new(90.0, 180.0))
+            ).unwrap();
+          } else {
+            let line = graphics::Mesh::new_line(
+              ctx,
+              &[
+                self.enemies[0].position + nalgebra::Vector2::new(220.0, 165.0),
+                self.heroes[0].position + nalgebra::Vector2::new(90.0, 180.0),
+              ],
+              20.0,
+              graphics::Color::from_rgba(255, 0, 0, 128)
+            ).unwrap();
+            graphics::draw(
+              ctx,
+              &line,
+              graphics::DrawParam::default()
+            ).unwrap()
+          }
         }
       }
     }
@@ -315,7 +345,7 @@ impl event::EventHandler for State {
     let music_bar_max_pitch = 75;
 
     // FIXME Shouldn't have to divide LEAD_IN_MSEC by 4...
-    let completion_offset_x: f32 = (self.time.load(Ordering::Relaxed) as f32 - (LEAD_IN_MSEC/4 - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
+    let completion_offset_x: f32 = (time as f32 - (LEAD_IN_MSEC/4 - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
 
     // FIXME This could certainly be more efficient by remembering where it left off last time
     for pattern_note in &self.pattern {
