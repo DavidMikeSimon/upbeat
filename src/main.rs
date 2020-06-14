@@ -41,8 +41,6 @@ struct PatternNote {
 }
 
 fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
-  let mut r_pattern = Vec::new();
-
   match midi.header.format {
     Format::Parallel => {}, // OK
     _ => panic!("MIDI file must be in parallel (simultaneous tracks) format")
@@ -53,9 +51,6 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
     _ => panic!("MIDI timing must be metrical")
   };
   let ticks_per_beat: f64 = ticks_per_beat.into();
-
-  let mut prior_pitch = 0;
-  let mut prior_relative_pitch = RelativePitch::High;
 
   let mut microseconds_per_beat = 0;
   for event in &midi.tracks[0] { // Track 0 is the global timing track
@@ -89,24 +84,24 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
       let average_pitch: f64 = pitches.iter().map(|(_, p)| *p as f64).sum::<f64>() / pitches.len() as f64;
       (play_offset_ms, average_pitch.round() as u8)
     })
-    .for_each(|(play_offset_ms, pitch)| {
-      let relative_pitch = if pitch == prior_pitch {
-        prior_relative_pitch
-      } else if pitch > prior_pitch {
+    .scan((0, RelativePitch::High), |(prior_pitch, prior_relative_pitch), (play_offset_ms, pitch)| {
+      let relative_pitch = if pitch == *prior_pitch {
+        *prior_relative_pitch
+      } else if pitch > *prior_pitch {
         RelativePitch::High
       } else {
         RelativePitch::Low
       };
-      r_pattern.push(PatternNote {
+      let pn = PatternNote {
         play_offset_ms: play_offset_ms as u32,
         pitch: pitch,
         relative_pitch: relative_pitch,
-      });
-      prior_relative_pitch = relative_pitch;
-      prior_pitch = pitch;
-    });
-
-  r_pattern
+      };
+      *prior_relative_pitch = relative_pitch;
+      *prior_pitch = pitch;
+      Some(pn)
+    })
+    .collect()
 }
 
 struct RelativePitchInput {
