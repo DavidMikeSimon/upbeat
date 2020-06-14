@@ -1,4 +1,5 @@
 extern crate ggez;
+extern crate itertools;
 extern crate nalgebra;
 extern crate rodio;
 extern crate midly;
@@ -11,20 +12,20 @@ use std::{
   env,
   fs,
   io::BufReader,
-  iter,
   path,
   time::Duration,
   sync::{Arc, atomic::{AtomicU32, Ordering}},
 };
 
 use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
+use itertools::Itertools;
 use rodio::{Sink, Source};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
 
 use assets::Assets;
 use counting_source::CountingSource;
 
-const TARGET_TRACK: usize = 17;
+const TARGET_TRACK: usize = 12;
 const LEAD_IN_MSEC: u32 = 4000; // TODO: Actual duration seems to be about 1/4th this?
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -55,7 +56,6 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
 
   let mut prior_pitch = 0;
   let mut prior_relative_pitch = RelativePitch::High;
-  let mut play_offset_ms = 0.0;
 
   let mut microseconds_per_beat = 0;
   for event in &midi.tracks[0] { // Track 0 is the global timing track
@@ -69,57 +69,42 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   let ms_per_beat: f64 = (microseconds_per_beat as f64)/1000.0;
   let ms_per_tick = ms_per_beat/ticks_per_beat;
 
-  let mut event_iter = midi.tracks[TARGET_TRACK].iter();
+  midi.tracks[TARGET_TRACK]
+    .iter()
+    .scan(0.0, |play_offset_ms, &event| {
+      *play_offset_ms = *play_offset_ms + event.delta.as_int() as f64 * ms_per_tick;
 
-  loop {
-    match event_iter.by_ref().next() {
-      None => break,
-      Some(lead_event) => {
-        let delta = lead_event.delta.as_int() as f64;
-        dbg!(delta);
-        play_offset_ms += delta * ms_per_tick;
-
-        let mut pitches: Vec<f64> = Vec::new();
-
-        match lead_event.kind {
-          EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
-            pitches.push(pitch.as_int().into());
-          },
-          _ => {} // Ignore
-        }
-
-        for event in event_iter.by_ref().take_while(|sub_event| sub_event.delta.as_int() == 0) {
-          match event.kind {
-            EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
-              pitches.push(pitch.as_int().into());
-            },
-            _ => {} // Ignore
-          }
-        }
-
-        if pitches.len() == 0 { continue; }
-        dbg!(play_offset_ms);
-        dbg!(&pitches);
-
-        let pitch = (pitches.iter().fold(0.0, |acc, p| acc + p)/(pitches.len() as f64)).round() as u8;
-        dbg!(&pitch);
-        let relative_pitch = if pitch == prior_pitch {
-          prior_relative_pitch
-        } else if pitch > prior_pitch {
-          RelativePitch::High
-        } else {
-          RelativePitch::Low
-        };
-        r_pattern.push(PatternNote {
-          play_offset_ms: play_offset_ms as u32,
-          pitch: pitch,
-          relative_pitch: relative_pitch,
-        });
-        prior_relative_pitch = relative_pitch;
-        prior_pitch = pitch;
+      match event.kind {
+        EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
+          Some(Some((play_offset_ms.clone(), pitch.as_int())))
+        },
+        _ => Some(None) // Ignore events other than NoteOn
       }
-    }
-  }
+    })
+    .flatten()
+    .group_by(|(play_offset_ms, _)| play_offset_ms.clone())
+    .into_iter()
+    .map(|(play_offset_ms, pitches)| {
+      let pitches: Vec<(f64, u8)> = pitches.collect();
+      let average_pitch: f64 = pitches.iter().map(|(_, p)| *p as f64).sum::<f64>() / pitches.len() as f64;
+      (play_offset_ms, average_pitch.round() as u8)
+    })
+    .for_each(|(play_offset_ms, pitch)| {
+      let relative_pitch = if pitch == prior_pitch {
+        prior_relative_pitch
+      } else if pitch > prior_pitch {
+        RelativePitch::High
+      } else {
+        RelativePitch::Low
+      };
+      r_pattern.push(PatternNote {
+        play_offset_ms: play_offset_ms as u32,
+        pitch: pitch,
+        relative_pitch: relative_pitch,
+      });
+      prior_relative_pitch = relative_pitch;
+      prior_pitch = pitch;
+    });
 
   r_pattern
 }
