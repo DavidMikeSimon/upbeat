@@ -14,7 +14,7 @@ pub struct Assets {
 
   pub char2_idle: Vec<graphics::Image>,
 
-  pub attack_effect: graphics::Mesh,
+  pub after_attack_effect: graphics::Mesh,
 
   pub music_bar_height: f32,
   pub music_bar: graphics::Mesh,
@@ -56,7 +56,7 @@ impl Assets {
     char2_idle.insert(0, char2_idle[0].clone());
     char2_idle.insert(0, char2_idle[0].clone());
 
-    let attack_effect = graphics::Mesh::new_circle(
+    let after_attack_effect = graphics::Mesh::new_circle(
       ctx,
       graphics::DrawMode::fill(),
       nalgebra::Point2::new(0.0, 0.0),
@@ -145,7 +145,7 @@ impl Assets {
 
       char2_idle: char2_idle,
 
-      attack_effect: attack_effect,
+      after_attack_effect: after_attack_effect,
 
       music_bar_height: music_bar_height,
       music_bar: music_bar,
