@@ -11,6 +11,7 @@ use std::{
   env,
   fs,
   io::BufReader,
+  iter,
   path,
   time::Duration,
   sync::{Arc, atomic::{AtomicU32, Ordering}},
@@ -23,7 +24,7 @@ use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
 use assets::Assets;
 use counting_source::CountingSource;
 
-const TARGET_TRACK: usize = 10;
+const TARGET_TRACK: usize = 17;
 const LEAD_IN_MSEC: u32 = 4000; // TODO: Actual duration seems to be about 1/4th this?
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -68,12 +69,40 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   let ms_per_beat: f64 = (microseconds_per_beat as f64)/1000.0;
   let ms_per_tick = ms_per_beat/ticks_per_beat;
 
-  for event in &midi.tracks[TARGET_TRACK] {
-    play_offset_ms += (event.delta.as_int() as f64) * ms_per_tick;
+  let mut event_iter = midi.tracks[TARGET_TRACK].iter();
 
-    match event.kind {
-      EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
-        let pitch = pitch.as_int();
+  loop {
+    match event_iter.by_ref().next() {
+      None => break,
+      Some(lead_event) => {
+        let delta = lead_event.delta.as_int() as f64;
+        dbg!(delta);
+        play_offset_ms += delta * ms_per_tick;
+
+        let mut pitches: Vec<f64> = Vec::new();
+
+        match lead_event.kind {
+          EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
+            pitches.push(pitch.as_int().into());
+          },
+          _ => {} // Ignore
+        }
+
+        for event in event_iter.by_ref().take_while(|sub_event| sub_event.delta.as_int() == 0) {
+          match event.kind {
+            EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
+              pitches.push(pitch.as_int().into());
+            },
+            _ => {} // Ignore
+          }
+        }
+
+        if pitches.len() == 0 { continue; }
+        dbg!(play_offset_ms);
+        dbg!(&pitches);
+
+        let pitch = (pitches.iter().fold(0.0, |acc, p| acc + p)/(pitches.len() as f64)).round() as u8;
+        dbg!(&pitch);
         let relative_pitch = if pitch == prior_pitch {
           prior_relative_pitch
         } else if pitch > prior_pitch {
@@ -88,8 +117,7 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
         });
         prior_relative_pitch = relative_pitch;
         prior_pitch = pitch;
-      },
-      _ => {} // Ignore
+      }
     }
   }
 
@@ -115,14 +143,14 @@ struct State {
 
 impl State {
   fn new(ctx: &mut Context) -> State {
-    let midi_bytes = fs::read("resources/music/weeppiko_musix_-_were_fighting_again.mid").unwrap();
+    let midi_bytes = fs::read("resources/music/goluigi_-_neboke.mid").unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
     let pattern = get_pattern(&midi);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
 
-    let ogg_file = fs::File::open("resources/music/weeppiko_musix_-_were_fighting_again.ogg").unwrap();
+    let ogg_file = fs::File::open("resources/music/goluigi_-_neboke.ogg").unwrap();
     let music_source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
     let lead_in_source = rodio::source::Zero::<f32>::new(music_source.channels(), music_source.sample_rate()).take_duration(Duration::from_millis(LEAD_IN_MSEC.into()));
 
