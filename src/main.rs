@@ -25,8 +25,10 @@ use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
 use assets::Assets;
 use counting_source::CountingSource;
 
-const TARGET_TRACK: usize = 12;
-const LEAD_IN_MSEC: u32 = 4000; // TODO: Actual duration seems to be about 1/4th this?
+const MIDI_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.mid";
+const OGG_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.ogg";
+const TARGET_TRACK: usize = 10;
+const LEAD_IN_MSEC: u32 = 4000; // FIXME: Actual duration seems to be about 1/4th this?
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
@@ -150,14 +152,14 @@ struct State {
 
 impl State {
   fn new(ctx: &mut Context) -> State {
-    let midi_bytes = fs::read("resources/music/goluigi_-_neboke.mid").unwrap();
+    let midi_bytes = fs::read(MIDI_PATH).unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
     let pattern = get_pattern(&midi);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
 
-    let ogg_file = fs::File::open("resources/music/goluigi_-_neboke.ogg").unwrap();
+    let ogg_file = fs::File::open(OGG_PATH).unwrap();
     let music_source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
     let lead_in_source = rodio::source::Zero::<f32>::new(music_source.channels(), music_source.sample_rate()).take_duration(Duration::from_millis(LEAD_IN_MSEC.into()));
 
