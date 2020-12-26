@@ -250,7 +250,7 @@ impl event::EventHandler for State {
 
       let nearest_note_offset_ms: i32 = i32::try_from(input.time).unwrap() - i32::try_from(nearest_pattern_note.time).unwrap();
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
-      println!("MATCH {:5}: {:+3}msec", relative_pitch_ok, nearest_note_offset_ms);
+      println!("MATCH {:5}: {:+4}msec (T:{:+7})", relative_pitch_ok, nearest_note_offset_ms, nearest_pattern_note.time);
 
       self.command_cursor_index = match (input.relative_pitch, self.command_cursor_index) {
         (RelativePitch::High, 0) => 3,
