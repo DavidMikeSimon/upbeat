@@ -331,15 +331,15 @@ impl event::EventHandler for State {
     graphics::draw(
       ctx,
       &self.assets.music_bar,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(self.assets.command_window_width, window.h - self.assets.music_bar_height))
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(0.0, window.h - self.assets.music_bar_height))
     ).unwrap();
-
-    let now_line_x = self.assets.command_window_width + self.assets.now_line_x_offset;
 
     graphics::draw(
       ctx,
       &self.assets.now_line,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(now_line_x, window.h - self.assets.music_bar_height))
+      graphics::DrawParam::default().dest(nalgebra::Point2::new(
+        window.w/2.0, window.h - self.assets.music_bar_height
+      ))
     ).unwrap();
 
     let spacing_per_second = window.w/5.0;
@@ -351,8 +351,8 @@ impl event::EventHandler for State {
 
     // FIXME This could certainly be more efficient by remembering where it left off last time
     for pattern_note in &self.pattern {
-      let x = (pattern_note.time as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
-      if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
+      let x = (pattern_note.time as f32)/1000.0 * spacing_per_second - completion_offset_x;
+      if x >= 0.0 && x <= window.w/2.0 { 
         let mesh = match pattern_note.relative_pitch {
           RelativePitch::High => &self.assets.up_arrow,
           RelativePitch::Low => &self.assets.down_arrow,
@@ -362,11 +362,17 @@ impl event::EventHandler for State {
         graphics::draw(
           ctx,
           mesh,
-          graphics::DrawParam::default().dest(nalgebra::Point2::new(x, y))
+          graphics::DrawParam::default().dest(nalgebra::Point2::new(window.w/2.0 + x, y))
+        ).unwrap();
+        graphics::draw(
+          ctx,
+          mesh,
+          graphics::DrawParam::default().dest(nalgebra::Point2::new(window.w/2.0 - x, y))
         ).unwrap();
       }
     }
 
+    /*
     graphics::draw(
       ctx,
       &self.assets.command_window,
@@ -407,6 +413,7 @@ impl event::EventHandler for State {
       &self.assets.command_cursor,
       graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin/2.0, window.h - self.assets.music_bar_height + top_margin + font_size*0.5 + line_spacing*(self.command_cursor_index as f32)))
     ).unwrap();
+    */
 
     if self.sink.is_paused() {
       let text = graphics::Text::new(("Press Enter", self.assets.font, 75.0));
