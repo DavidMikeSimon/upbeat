@@ -112,6 +112,7 @@ struct RelativePitchInput {
 }
 
 struct HeroState {
+  idx: usize,
   position: nalgebra::Point2<f32>,
   hp: u32,
   max_hp: u32
@@ -144,7 +145,6 @@ struct State {
   relative_pitch_input: Option<RelativePitchInput>,
   pattern: Vec<PatternNote>,
   sink: Sink,
-  char2_idle_frame: usize,
   heroes: Vec<HeroState>,
   enemies: Vec<EnemyState>,
   actions: Vec<CombatAction>
@@ -177,10 +177,9 @@ impl State {
       relative_pitch_input: None,
       pattern: pattern,
       sink: sink,
-      char2_idle_frame: 0,
       heroes: vec![
-        HeroState { position: nalgebra::Point2::new(180.0, 35.0), hp: 180, max_hp: 180 },
-        HeroState { position: nalgebra::Point2::new(350.0, 110.0), hp: 220, max_hp: 220 },
+        HeroState { idx: 1, position: nalgebra::Point2::new(260.0, 125.0), hp: 180, max_hp: 180 },
+        HeroState { idx: 2, position: nalgebra::Point2::new(390.0, 280.0), hp: 220, max_hp: 220 },
       ],
       enemies: vec![
         EnemyState {
@@ -280,14 +279,18 @@ impl event::EventHandler for State {
     for hero in &self.heroes {
       graphics::draw(
         ctx,
-        &self.assets.char2_idle[self.char2_idle_frame],
-        graphics::DrawParam::default().dest(hero.position)
+        match hero.idx {
+          1 => &self.assets.char1,
+          2 => &self.assets.char2,
+          _ => panic!("Unknown hero idx")
+        },
+        graphics::DrawParam::default().dest(hero.position).scale(nalgebra::Vector2::new(0.5, 0.5))
       ).unwrap();
 
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 35.0)),
-        graphics::DrawParam::default().dest(hero.position + nalgebra::Vector2::new(20.0, -20.0))
+        graphics::DrawParam::default().dest(hero.position + nalgebra::Vector2::new(20.0, -30.0))
       ).unwrap();
     }
 
@@ -306,14 +309,14 @@ impl event::EventHandler for State {
             graphics::draw(
               ctx,
               &self.assets.after_attack_effect,
-              graphics::DrawParam::default().dest(self.heroes[0].position + nalgebra::Vector2::new(90.0, 180.0))
+              graphics::DrawParam::default().dest(self.heroes[0].position + nalgebra::Vector2::new(45.0, 90.0))
             ).unwrap();
           } else {
             let line = graphics::Mesh::new_line(
               ctx,
               &[
                 self.enemies[0].position + nalgebra::Vector2::new(220.0, 165.0),
-                self.heroes[0].position + nalgebra::Vector2::new(90.0, 180.0),
+                self.heroes[0].position + nalgebra::Vector2::new(45.0, 90.0),
               ],
               20.0,
               graphics::Color::from_rgba(255, 0, 0, 128)
@@ -409,7 +412,7 @@ impl event::EventHandler for State {
     ).unwrap();
 
     if self.sink.is_paused() {
-      let text = graphics::Text::new(("Press Enter", self.assets.font, 75.0));
+      let text = graphics::Text::new(("Paused - press enter", self.assets.font, 75.0));
       let x = (window.w - text.width(ctx) as f32)/2.0;
       graphics::draw(
         ctx,

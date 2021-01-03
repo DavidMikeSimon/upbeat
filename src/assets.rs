@@ -1,8 +1,4 @@
-use std::{
-  path::PathBuf,
-};
-
-use ggez::{filesystem, graphics, Context};
+use ggez::{graphics, Context};
 
 pub struct Assets {
   pub font: graphics::Font,
@@ -11,8 +7,6 @@ pub struct Assets {
   pub char1: graphics::Image,
   pub char2: graphics::Image,
   pub monster: graphics::Image,
-
-  pub char2_idle: Vec<graphics::Image>,
 
   pub after_attack_effect: graphics::Mesh,
 
@@ -41,20 +35,6 @@ impl Assets {
     let char1 = graphics::Image::new(ctx, "/images/char1.png").unwrap();
     let char2 = graphics::Image::new(ctx, "/images/char2.png").unwrap();
     let monster = graphics::Image::new(ctx, "/images/monster.png").unwrap();
-
-    let mut char2_idle = Vec::new();
-    {
-      let mut paths: Vec<PathBuf> = filesystem::read_dir(ctx, "/images/char2_idle").unwrap().collect();
-      paths.sort();
-      for path in paths { char2_idle.push(graphics::Image::new(ctx, path).unwrap()) }
-    }
-    // FIXME: No, no, don't do this, no
-    char2_idle.insert(5, char2_idle[5].clone());
-    char2_idle.insert(5, char2_idle[5].clone());
-    char2_idle.insert(5, char2_idle[5].clone());
-    char2_idle.insert(0, char2_idle[0].clone());
-    char2_idle.insert(0, char2_idle[0].clone());
-    char2_idle.insert(0, char2_idle[0].clone());
 
     let after_attack_effect = graphics::Mesh::new_circle(
       ctx,
@@ -142,8 +122,6 @@ impl Assets {
       char1: char1,
       char2: char2,
       monster: monster,
-
-      char2_idle: char2_idle,
 
       after_attack_effect: after_attack_effect,
 
