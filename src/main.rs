@@ -21,6 +21,7 @@ use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
 use itertools::Itertools;
 use rodio::{Sink, Source};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
+use nalgebra::{Point2, Vector2};
 
 use assets::Assets;
 use counting_source::CountingSource;
@@ -113,13 +114,13 @@ struct RelativePitchInput {
 
 struct HeroState {
   idx: usize,
-  position: nalgebra::Point2<f32>,
+  position: Point2<f32>,
   hp: u32,
   max_hp: u32
 }
 
 struct EnemyState {
-  position: nalgebra::Point2<f32>,
+  position: Point2<f32>,
   next_move_time: u32,
   ms_between_moves: u32,
   attack_power: u32
@@ -138,7 +139,6 @@ struct CombatAction {
 
 struct State {
   assets: Assets,
-  command_cursor_index: u8,
   dt: Duration,
   time: Arc<AtomicU32>,
   lead_in_offset_ms: Arc<AtomicU32>,
@@ -170,7 +170,6 @@ impl State {
 
     State {
       assets: Assets::new(ctx),
-      command_cursor_index: 0,
       dt: Duration::default(),
       time: time,
       lead_in_offset_ms: lead_in_offset_ms,
@@ -178,12 +177,12 @@ impl State {
       pattern: pattern,
       sink: sink,
       heroes: vec![
-        HeroState { idx: 1, position: nalgebra::Point2::new(260.0, 125.0), hp: 180, max_hp: 180 },
-        HeroState { idx: 2, position: nalgebra::Point2::new(390.0, 280.0), hp: 220, max_hp: 220 },
+        HeroState { idx: 1, position: Point2::new(260.0, 125.0), hp: 180, max_hp: 180 },
+        HeroState { idx: 2, position: Point2::new(390.0, 280.0), hp: 220, max_hp: 220 },
       ],
       enemies: vec![
         EnemyState {
-          position: nalgebra::Point2::new(644.0, 85.0),
+          position: Point2::new(644.0, 85.0),
           next_move_time: 5000,
           ms_between_moves: 5000,
           attack_power: 50
@@ -251,13 +250,6 @@ impl event::EventHandler for State {
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
       println!("MATCH {:5}: {:+4}msec (T:{:+7})", relative_pitch_ok, nearest_note_offset_ms, nearest_pattern_note.time);
 
-      self.command_cursor_index = match (input.relative_pitch, self.command_cursor_index) {
-        (RelativePitch::High, 0) => 3,
-        (RelativePitch::High, _) => self.command_cursor_index - 1,
-        (RelativePitch::Low, 3) => 0,
-        (RelativePitch::Low, _) => self.command_cursor_index + 1,
-      };
-
       self.relative_pitch_input = None;
     }
 
@@ -284,13 +276,13 @@ impl event::EventHandler for State {
           2 => &self.assets.char2,
           _ => panic!("Unknown hero idx")
         },
-        graphics::DrawParam::default().dest(hero.position).scale(nalgebra::Vector2::new(0.5, 0.5))
+        graphics::DrawParam::default().dest(hero.position).scale(Vector2::new(0.5, 0.5))
       ).unwrap();
 
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 20.0)),
-        graphics::DrawParam::default().dest(hero.position + nalgebra::Vector2::new(-250.0, 100.0))
+        graphics::DrawParam::default().dest(hero.position + Vector2::new(-250.0, 100.0))
       ).unwrap();
     }
 
@@ -309,14 +301,14 @@ impl event::EventHandler for State {
             graphics::draw(
               ctx,
               &self.assets.after_attack_effect,
-              graphics::DrawParam::default().dest(self.heroes[0].position + nalgebra::Vector2::new(45.0, 90.0))
+              graphics::DrawParam::default().dest(self.heroes[0].position + Vector2::new(45.0, 90.0))
             ).unwrap();
           } else {
             let line = graphics::Mesh::new_line(
               ctx,
               &[
-                self.enemies[0].position + nalgebra::Vector2::new(220.0, 165.0),
-                self.heroes[0].position + nalgebra::Vector2::new(45.0, 90.0),
+                self.enemies[0].position + Vector2::new(220.0, 165.0),
+                self.heroes[0].position + Vector2::new(45.0, 90.0),
               ],
               20.0,
               graphics::Color::from_rgba(255, 0, 0, 128)
@@ -334,15 +326,15 @@ impl event::EventHandler for State {
     graphics::draw(
       ctx,
       &self.assets.music_bar,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(self.assets.command_window_width, window.h - self.assets.music_bar_height))
+      graphics::DrawParam::default().dest(Point2::new(0.0, window.h - self.assets.music_bar_height))
     ).unwrap();
 
-    let now_line_x = self.assets.command_window_width + self.assets.now_line_x_offset;
+    let now_line_x = self.assets.now_line_x_offset;
 
     graphics::draw(
       ctx,
       &self.assets.now_line,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(now_line_x, window.h - self.assets.music_bar_height))
+      graphics::DrawParam::default().dest(Point2::new(now_line_x, window.h - self.assets.music_bar_height))
     ).unwrap();
 
     let spacing_per_second = window.w/5.0;
@@ -365,51 +357,10 @@ impl event::EventHandler for State {
         graphics::draw(
           ctx,
           mesh,
-          graphics::DrawParam::default().dest(nalgebra::Point2::new(x, y))
+          graphics::DrawParam::default().dest(Point2::new(x, y))
         ).unwrap();
       }
     }
-
-    graphics::draw(
-      ctx,
-      &self.assets.command_window,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(0.0, window.h - self.assets.music_bar_height))
-    ).unwrap();
-
-    let left_margin = 50.0;
-    let top_margin = 5.0;
-    let font_size = 55.0;
-    let line_spacing = 45.0;
-
-    graphics::draw(
-      ctx,
-      &graphics::Text::new(("Strike", self.assets.font, font_size)),
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin))
-    ).unwrap();
-
-    graphics::draw(
-      ctx,
-      &graphics::Text::new(("Hold", self.assets.font, font_size)),
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing))
-    ).unwrap();
-
-    graphics::draw(
-      ctx,
-      &graphics::Text::new(("Magic", self.assets.font, font_size)),
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing*2.0))
-    ).unwrap();
-
-    graphics::draw(
-      ctx,
-      &graphics::Text::new(("Items", self.assets.font, font_size)),
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin, window.h - self.assets.music_bar_height + top_margin + line_spacing*3.0))
-    ).unwrap();
-
-    graphics::draw(
-      ctx,
-      &self.assets.command_cursor,
-      graphics::DrawParam::default().dest(nalgebra::Point2::new(left_margin/2.0, window.h - self.assets.music_bar_height + top_margin + font_size*0.5 + line_spacing*(self.command_cursor_index as f32)))
-    ).unwrap();
 
     if self.sink.is_paused() {
       let text = graphics::Text::new(("Paused - press enter", self.assets.font, 75.0));
@@ -417,7 +368,7 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         &text,
-        graphics::DrawParam::default().dest(nalgebra::Point2::new(x, 250.0))
+        graphics::DrawParam::default().dest(Point2::new(x, 250.0))
       ).unwrap();
     }
 
