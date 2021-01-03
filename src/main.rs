@@ -184,8 +184,8 @@ impl State {
       enemies: vec![
         EnemyState {
           position: nalgebra::Point2::new(644.0, 85.0),
-          next_move_time: 2000,
-          ms_between_moves: 2000,
+          next_move_time: 5000,
+          ms_between_moves: 5000,
           attack_power: 50
         },
       ],
@@ -289,8 +289,8 @@ impl event::EventHandler for State {
 
       graphics::draw(
         ctx,
-        &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 35.0)),
-        graphics::DrawParam::default().dest(hero.position + nalgebra::Vector2::new(20.0, -30.0))
+        &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 20.0)),
+        graphics::DrawParam::default().dest(hero.position + nalgebra::Vector2::new(-250.0, 100.0))
       ).unwrap();
     }
 
