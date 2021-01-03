@@ -17,7 +17,7 @@ use std::{
   sync::{Arc, atomic::{AtomicU32, Ordering}},
 };
 
-use ggez::{conf, event, graphics, timer, input::keyboard, Context, GameResult};
+use ggez::{conf, event, graphics, timer, input::keyboard::{KeyCode, KeyMods}, Context, GameResult};
 use itertools::Itertools;
 use rodio::{Sink, Source};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
@@ -107,7 +107,16 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
     .collect()
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum NavDirection {
+  Up,
+  Right,
+  Down,
+  Left
+}
+
 struct RelativePitchInput {
+  direction: NavDirection,
   relative_pitch: RelativePitch,
   time: u32
 }
@@ -368,7 +377,7 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         &text,
-        graphics::DrawParam::default().dest(Point2::new(x, 250.0))
+        graphics::DrawParam::default().dest(Point2::new(x, 50.0))
       ).unwrap();
     }
 
@@ -378,31 +387,40 @@ impl event::EventHandler for State {
   fn key_down_event(
     &mut self,
     ctx: &mut Context,
-    keycode: keyboard::KeyCode,
-    _keymods: keyboard::KeyMods,
+    keycode: KeyCode,
+    _keymods: KeyMods,
     repeat: bool
   ) {
     if repeat { return; }
 
     if self.sink.is_paused() {
       match keycode {
-        keyboard::KeyCode::Escape => event::quit(ctx),
-        keyboard::KeyCode::Return => self.sink.play(),
+        KeyCode::Escape => event::quit(ctx),
+        KeyCode::Return => self.sink.play(),
         _ => {}
       }
     } else {
       // TODO: Is the play_offset here slightly off because of time elapsed since last update()?
       match keycode {
-        keyboard::KeyCode::Escape => event::quit(ctx),
-        keyboard::KeyCode::Return => self.sink.pause(),
-        keyboard::KeyCode::Up => self.relative_pitch_input = Some(RelativePitchInput {
-          relative_pitch: RelativePitch::High,
-          time: self.time.load(Ordering::Relaxed),
-        }),
-        keyboard::KeyCode::Down => self.relative_pitch_input = Some(RelativePitchInput {
-          relative_pitch: RelativePitch::Low,
-          time: self.time.load(Ordering::Relaxed),
-        }),
+        KeyCode::Escape => event::quit(ctx),
+        KeyCode::Return => self.sink.pause(),
+        KeyCode::Up | KeyCode::Right | KeyCode::Down | KeyCode::Left => {
+          self.relative_pitch_input = Some(RelativePitchInput {
+            direction: match keycode {
+              KeyCode::Up => NavDirection::Up,
+              KeyCode::Down => NavDirection::Down,
+              KeyCode::Left => NavDirection::Left,
+              KeyCode::Right => NavDirection::Right,
+              _ => unreachable!()
+            },
+            relative_pitch: match keycode {
+              KeyCode::Up | KeyCode::Right => RelativePitch::High,
+              KeyCode::Down | KeyCode::Left => RelativePitch::Low,
+              _ => unreachable!()
+            },
+            time: self.time.load(Ordering::Relaxed),
+          })
+        },
         _ => {}
       }
     }
