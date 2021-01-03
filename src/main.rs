@@ -156,7 +156,8 @@ struct State {
   sink: Sink,
   heroes: Vec<HeroState>,
   enemies: Vec<EnemyState>,
-  actions: Vec<CombatAction>
+  actions: Vec<CombatAction>,
+  command_window_hero: usize,
 }
 
 impl State {
@@ -186,18 +187,40 @@ impl State {
       pattern: pattern,
       sink: sink,
       heroes: vec![
-        HeroState { idx: 1, position: Point2::new(260.0, 125.0), hp: 180, max_hp: 180 },
-        HeroState { idx: 2, position: Point2::new(390.0, 280.0), hp: 220, max_hp: 220 },
+        HeroState { idx: 0, position: Point2::new(260.0, 125.0), hp: 180, max_hp: 180 },
+        HeroState { idx: 1, position: Point2::new(390.0, 280.0), hp: 220, max_hp: 220 },
       ],
       enemies: vec![
         EnemyState {
           position: Point2::new(644.0, 85.0),
           next_move_time: 5000,
           ms_between_moves: 5000,
-          attack_power: 50
+          attack_power: 20
         },
       ],
-      actions: Vec::new()
+      actions: Vec::new(),
+      command_window_hero: 0
+    }
+  }
+
+  fn draw_command_window(&self, ctx: &mut Context, hero: &HeroState) {
+    let mut center_point = Point2::new(hero.position.x + 35.0, hero.position.y + 50.0);
+    if hero.idx == 0 {
+      center_point.x -= 10.0;
+    }
+
+    graphics::draw(
+      ctx,
+      &self.assets.button,
+      graphics::DrawParam::default().dest(center_point + Vector2::new(self.assets.button_width + self.assets.button_margin, 0.0))
+    ).unwrap();
+
+    if self.command_window_hero == hero.idx {
+      graphics::draw(
+        ctx,
+        &self.assets.cursor,
+        graphics::DrawParam::default().dest(center_point)
+      ).unwrap();
     }
   }
 }
@@ -259,6 +282,10 @@ impl event::EventHandler for State {
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
       println!("MATCH {:5}: {:+4}msec (T:{:+7})", relative_pitch_ok, nearest_note_offset_ms, nearest_pattern_note.time);
 
+      if input.direction == NavDirection::Down {
+        self.command_window_hero = (self.command_window_hero + 1) % self.heroes.len();
+      }
+
       self.relative_pitch_input = None;
     }
 
@@ -281,12 +308,14 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         match hero.idx {
-          1 => &self.assets.char1,
-          2 => &self.assets.char2,
+          0 => &self.assets.char1,
+          1 => &self.assets.char2,
           _ => panic!("Unknown hero idx")
         },
         graphics::DrawParam::default().dest(hero.position).scale(Vector2::new(0.5, 0.5))
       ).unwrap();
+
+      self.draw_command_window(ctx, &hero);
 
       graphics::draw(
         ctx,

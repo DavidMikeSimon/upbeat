@@ -1,4 +1,5 @@
 use ggez::{graphics, Context};
+use nalgebra::{Point2};
 
 pub struct Assets {
   pub font: graphics::Font,
@@ -9,6 +10,11 @@ pub struct Assets {
   pub monster: graphics::Image,
 
   pub after_attack_effect: graphics::Mesh,
+
+  pub button_width: f32,
+  pub button_margin: f32,
+  pub cursor: graphics::Mesh,
+  pub button: graphics::Mesh,
 
   pub music_bar_height: f32,
   pub music_bar: graphics::Mesh,
@@ -24,6 +30,8 @@ pub struct Assets {
 
 impl Assets {
   pub fn new(ctx: &mut Context) -> Assets {
+    let window = graphics::screen_coordinates(ctx);
+
     let font = graphics::Font::new(ctx, "/fonts/Catamaran/Catamaran-Regular.ttf").unwrap();
 
     let bg = graphics::Image::new(ctx, "/images/bg.png").unwrap();
@@ -34,13 +42,28 @@ impl Assets {
     let after_attack_effect = graphics::Mesh::new_circle(
       ctx,
       graphics::DrawMode::fill(),
-      nalgebra::Point2::new(0.0, 0.0),
+      Point2::new(0.0, 0.0),
       50.0,
       0.1,
       graphics::Color::from_rgba(255, 0, 0, 128)
     ).unwrap();
 
-    let window = graphics::screen_coordinates(ctx);
+    let button_width = 40.0;
+    let button_margin = 5.0;
+
+    let cursor = graphics::Mesh::new_rectangle(
+      ctx,
+      graphics::DrawMode::stroke(5.0),
+      graphics::Rect::new(0.0, 0.0, button_width, button_width),
+      graphics::Color::from_rgb(210, 250, 180)
+    ).unwrap();
+
+    let button = graphics::Mesh::new_rectangle(
+      ctx,
+      graphics::DrawMode::fill(),
+      graphics::Rect::new(0.0, 0.0, button_width, button_width),
+      graphics::Color::from_rgba(210, 210, 210, 128)
+    ).unwrap();
 
     let music_bar_height = 200.0;
 
@@ -57,8 +80,8 @@ impl Assets {
     let now_line = graphics::Mesh::new_line(
       ctx,
       &[
-        nalgebra::Point2::new(0.0, 0.0),
-        nalgebra::Point2::new(0.0, music_bar_height)
+        Point2::new(0.0, 0.0),
+        Point2::new(0.0, music_bar_height)
       ],
       now_line_width,
       graphics::BLACK
@@ -71,9 +94,9 @@ impl Assets {
       ctx,
       graphics::DrawMode::fill(),
       &[
-        nalgebra::Point2::new(0.0, -arrow_height/2.0),
-        nalgebra::Point2::new(arrow_width/2.0, arrow_height/2.0),
-        nalgebra::Point2::new(-arrow_width/2.0, arrow_height/2.0),
+        Point2::new(0.0, -arrow_height/2.0),
+        Point2::new(arrow_width/2.0, arrow_height/2.0),
+        Point2::new(-arrow_width/2.0, arrow_height/2.0),
       ],
       graphics::Color::from_rgb(0, 192, 32)
     ).unwrap();
@@ -82,9 +105,9 @@ impl Assets {
       ctx,
       graphics::DrawMode::fill(),
       &[
-        nalgebra::Point2::new(0.0, arrow_height/2.0),
-        nalgebra::Point2::new(-arrow_width/2.0, -arrow_height/2.0),
-        nalgebra::Point2::new(arrow_width/2.0, -arrow_height/2.0),
+        Point2::new(0.0, arrow_height/2.0),
+        Point2::new(-arrow_width/2.0, -arrow_height/2.0),
+        Point2::new(arrow_width/2.0, -arrow_height/2.0),
       ],
       graphics::Color::from_rgb(0, 32, 192)
     ).unwrap();
@@ -98,6 +121,12 @@ impl Assets {
       monster: monster,
 
       after_attack_effect: after_attack_effect,
+
+      button_width: button_width,
+      button_margin: button_margin,
+
+      cursor: cursor,
+      button: button,
 
       music_bar_height: music_bar_height,
       music_bar: music_bar,
