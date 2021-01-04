@@ -204,10 +204,16 @@ impl State {
   }
 
   fn draw_command_window(&self, ctx: &mut Context, hero: &HeroState) {
-    let mut center_point = Point2::new(hero.position.x + 35.0, hero.position.y + 50.0);
+    let mut center_point = Point2::new(hero.position.x + 25.0, hero.position.y + 40.0);
     if hero.idx == 0 {
       center_point.x -= 10.0;
     }
+
+    graphics::draw(
+      ctx,
+      &self.assets.cursor,
+      graphics::DrawParam::default().dest(center_point)
+    ).unwrap();
 
     graphics::draw(
       ctx,
@@ -215,13 +221,24 @@ impl State {
       graphics::DrawParam::default().dest(center_point + Vector2::new(self.assets.button_width + self.assets.button_margin, 0.0))
     ).unwrap();
 
-    if self.command_window_hero == hero.idx {
-      graphics::draw(
-        ctx,
-        &self.assets.cursor,
-        graphics::DrawParam::default().dest(center_point)
-      ).unwrap();
-    }
+    graphics::draw(
+      ctx,
+      &graphics::Text::new(("Stk", self.assets.font, 40.0)),
+      graphics::DrawParam::default().dest(center_point + Vector2::new(self.assets.button_width + self.assets.button_margin + 10.0, 10.0))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
+      &self.assets.button,
+      graphics::DrawParam::default().dest(center_point - Vector2::new(self.assets.button_width + self.assets.button_margin, 0.0))
+    ).unwrap();
+
+    graphics::draw(
+      ctx,
+      &graphics::Text::new(("Rst", self.assets.font, 40.0)),
+      graphics::DrawParam::default().dest(center_point + Vector2::new(-self.assets.button_width, 10.0))
+    ).unwrap();
+
   }
 }
 
@@ -315,7 +332,9 @@ impl event::EventHandler for State {
         graphics::DrawParam::default().dest(hero.position).scale(Vector2::new(0.5, 0.5))
       ).unwrap();
 
-      self.draw_command_window(ctx, &hero);
+      if self.command_window_hero == hero.idx {
+        self.draw_command_window(ctx, &hero);
+      }
 
       graphics::draw(
         ctx,

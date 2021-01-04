@@ -48,7 +48,7 @@ impl Assets {
       graphics::Color::from_rgba(255, 0, 0, 128)
     ).unwrap();
 
-    let button_width = 40.0;
+    let button_width = 60.0;
     let button_margin = 5.0;
 
     let cursor = graphics::Mesh::new_rectangle(
