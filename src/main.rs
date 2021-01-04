@@ -429,7 +429,7 @@ impl event::EventHandler for State {
       }
     }
 
-    // FIXME: This could certainly be more efficient by remembering where it left off last time
+    // FIXME: This could certainly be more efficient by not checking every single pattern note
     for pattern_note in &self.pattern {
       let x = (pattern_note.time as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
       if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
