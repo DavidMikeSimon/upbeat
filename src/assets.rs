@@ -23,6 +23,8 @@ pub struct Assets {
   pub now_line_x_offset: f32,
   pub now_line: graphics::Mesh,
 
+  pub measure_line: graphics::Mesh,
+
   pub arrow_width: f32,
   pub up_arrow: graphics::Mesh,
   pub down_arrow: graphics::Mesh,
@@ -87,6 +89,18 @@ impl Assets {
       graphics::BLACK
     ).unwrap();
 
+    let measure_line_width = 2.0;
+    let measure_line = graphics::Mesh::new_line(
+      ctx,
+      &[
+        Point2::new(0.0, 0.0),
+        Point2::new(0.0, music_bar_height)
+      ],
+      measure_line_width,
+      graphics::Color::from_rgb(64, 64, 64)
+    ).unwrap();
+
+
     let arrow_width = 20.0;
     let arrow_height = 10.0;
 
@@ -134,6 +148,8 @@ impl Assets {
       now_line_width: now_line_width,
       now_line_x_offset: now_line_x_offset,
       now_line: now_line,
+
+      measure_line: measure_line,
 
       arrow_width: arrow_width,
       up_arrow: up_arrow,

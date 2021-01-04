@@ -29,12 +29,18 @@ use counting_source::CountingSource;
 const MIDI_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.mid";
 const OGG_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.ogg";
 const TARGET_TRACK: usize = 10;
-const LEAD_IN_MSEC: u32 = 4000; // FIXME: Actual duration seems to be about 1/4th this?
+const LEAD_IN_MSEC: u32 = 1000;
+const BEATS_PER_MEASURE: f32 = 4.0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
   High,
   Low
+}
+
+struct MidiTiming {
+  ms_per_beat: f32,
+  ms_per_tick: f32,
 }
 
 struct PatternNote {
@@ -43,7 +49,7 @@ struct PatternNote {
   relative_pitch: RelativePitch,
 }
 
-fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
+fn get_timing(midi: &Smf) -> MidiTiming {
   match midi.header.format {
     Format::Parallel => {}, // OK
     _ => panic!("MIDI file must be in parallel (simultaneous tracks) format")
@@ -67,10 +73,17 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
   let ms_per_beat: f64 = (microseconds_per_beat as f64)/1000.0;
   let ms_per_tick = ms_per_beat/ticks_per_beat;
 
+  MidiTiming {
+    ms_per_beat: ms_per_beat as f32,
+    ms_per_tick: ms_per_tick as f32,
+  }
+}
+
+fn get_pattern(midi: &Smf, timing: &MidiTiming) -> Vec<PatternNote> {
   midi.tracks[TARGET_TRACK]
     .iter()
     .scan(0.0, |time, &event| {
-      *time = *time + event.delta.as_int() as f64 * ms_per_tick;
+      *time = *time + event.delta.as_int() as f32 * timing.ms_per_tick;
 
       match event.kind {
         EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
@@ -83,8 +96,8 @@ fn get_pattern(midi: &Smf) -> Vec<PatternNote> {
     .group_by(|(time, _)| time.clone())
     .into_iter()
     .map(|(time, pitches)| {
-      let pitches: Vec<(f64, u8)> = pitches.collect();
-      let average_pitch: f64 = pitches.iter().map(|(_, p)| *p as f64).sum::<f64>() / pitches.len() as f64;
+      let pitches: Vec<(f32, u8)> = pitches.collect();
+      let average_pitch: f32 = pitches.iter().map(|(_, p)| *p as f32).sum::<f32>() / pitches.len() as f32;
       (time, average_pitch.round() as u8)
     })
     .scan((0, RelativePitch::High), |(prior_pitch, prior_relative_pitch), (time, pitch)| {
@@ -152,6 +165,7 @@ struct State {
   time: Arc<AtomicU32>,
   lead_in_offset_ms: Arc<AtomicU32>,
   relative_pitch_input: Option<RelativePitchInput>,
+  timing: MidiTiming,
   pattern: Vec<PatternNote>,
   sink: Sink,
   heroes: Vec<HeroState>,
@@ -164,14 +178,16 @@ impl State {
   fn new(ctx: &mut Context) -> State {
     let midi_bytes = fs::read(MIDI_PATH).unwrap();
     let midi = Smf::parse(&midi_bytes).unwrap();
-    let pattern = get_pattern(&midi);
+    let timing = get_timing(&midi);
+    let pattern = get_pattern(&midi, &timing);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
     sink.pause();
 
     let ogg_file = fs::File::open(OGG_PATH).unwrap();
     let music_source = rodio::Decoder::new(BufReader::new(ogg_file)).unwrap();
-    let lead_in_source = rodio::source::Zero::<f32>::new(music_source.channels(), music_source.sample_rate()).take_duration(Duration::from_millis(LEAD_IN_MSEC.into()));
+    // FIXME: Shouldn't have to multiply LEAD_IN_MSEC by 4, is this a rodio bug?
+    let lead_in_source = rodio::source::Zero::<f32>::new(music_source.channels(), music_source.sample_rate()).take_duration(Duration::from_millis((LEAD_IN_MSEC*4).into()));
 
     let (music_source, time) = CountingSource::new(music_source);
     let (lead_in_source, lead_in_offset_ms) = CountingSource::new(lead_in_source);
@@ -184,6 +200,7 @@ impl State {
       time: time,
       lead_in_offset_ms: lead_in_offset_ms,
       relative_pitch_input: None,
+      timing: timing,
       pattern: pattern,
       sink: sink,
       heroes: vec![
@@ -398,10 +415,21 @@ impl event::EventHandler for State {
     let music_bar_min_pitch = 55;
     let music_bar_max_pitch = 75;
 
-    // FIXME Shouldn't have to divide LEAD_IN_MSEC by 4...
-    let completion_offset_x: f32 = (time as f32 - (LEAD_IN_MSEC/4 - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
+    let completion_offset_x: f32 = (time as f32 - (LEAD_IN_MSEC - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
 
-    // FIXME This could certainly be more efficient by remembering where it left off last time
+    // FIXME: This could _definitely_ be done more efficiently and correctly
+    for measure_idx in 0..100 {
+      let x = (measure_idx as f32) * BEATS_PER_MEASURE * (self.timing.ms_per_beat/1000.0) * spacing_per_second - completion_offset_x - now_line_x;
+      if x >= 0.0 && x <= window.w {
+        graphics::draw(
+          ctx,
+          &self.assets.measure_line,
+          graphics::DrawParam::default().dest(Point2::new(x, window.h - self.assets.music_bar_height))
+        ).unwrap();
+      }
+    }
+
+    // FIXME: This could certainly be more efficient by remembering where it left off last time
     for pattern_note in &self.pattern {
       let x = (pattern_note.time as f32)/1000.0 * spacing_per_second - completion_offset_x + now_line_x;
       if x >= (0.0 - self.assets.arrow_width) && x <= window.w { 
