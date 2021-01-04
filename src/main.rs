@@ -30,7 +30,6 @@ const MIDI_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.mi
 const OGG_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.ogg";
 const TARGET_TRACK: usize = 10;
 const LEAD_IN_MSEC: u32 = 1000;
-const BEATS_PER_MEASURE: f32 = 4.0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum RelativePitch {
@@ -41,6 +40,7 @@ enum RelativePitch {
 struct MidiTiming {
   ms_per_beat: f32,
   ms_per_tick: f32,
+  beats_per_measure: f32,
 }
 
 struct PatternNote {
@@ -62,9 +62,16 @@ fn get_timing(midi: &Smf) -> MidiTiming {
   let ticks_per_beat: f64 = ticks_per_beat.into();
 
   let mut microseconds_per_beat = 0;
+  let mut beats_per_measure = 0;
   for event in &midi.tracks[0] { // Track 0 is the global timing track
-    if let EventKind::Meta(MetaMessage::Tempo(mspb)) = event.kind {
-      microseconds_per_beat = mspb.as_int();
+    match event.kind {
+      EventKind::Meta(MetaMessage::Tempo(mspb)) => {
+        microseconds_per_beat = mspb.as_int();
+      },
+      EventKind::Meta(MetaMessage::TimeSignature(numerator, _, _, _)) => {
+        beats_per_measure = numerator;
+      },
+      _ => {}
     }
   }
   if microseconds_per_beat == 0 {
@@ -76,6 +83,7 @@ fn get_timing(midi: &Smf) -> MidiTiming {
   MidiTiming {
     ms_per_beat: ms_per_beat as f32,
     ms_per_tick: ms_per_tick as f32,
+    beats_per_measure: beats_per_measure as f32
   }
 }
 
@@ -419,7 +427,7 @@ impl event::EventHandler for State {
 
     // FIXME: This could _definitely_ be done more efficiently and correctly
     for measure_idx in 0..100 {
-      let x = (measure_idx as f32) * BEATS_PER_MEASURE * (self.timing.ms_per_beat/1000.0) * spacing_per_second - completion_offset_x - now_line_x;
+      let x = (measure_idx as f32) * self.timing.beats_per_measure * (self.timing.ms_per_beat/1000.0) * spacing_per_second - completion_offset_x - now_line_x;
       if x >= 0.0 && x <= window.w {
         graphics::draw(
           ctx,
