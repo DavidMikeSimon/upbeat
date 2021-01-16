@@ -37,6 +37,7 @@ enum RelativePitch {
   Low
 }
 
+#[derive(Copy, Clone, Debug)]
 struct MidiTiming {
   ms_per_beat: f32,
   ms_per_tick: f32,
@@ -427,7 +428,7 @@ impl event::EventHandler for State {
 
     // FIXME: This could _definitely_ be done more efficiently and correctly
     for measure_idx in 0..100 {
-      let x = (measure_idx as f32) * self.timing.beats_per_measure * (self.timing.ms_per_beat/1000.0) * spacing_per_second - completion_offset_x - now_line_x;
+      let x = (measure_idx as f32) * self.timing.beats_per_measure * (self.timing.ms_per_beat/1000.0) * spacing_per_second - completion_offset_x + now_line_x;
       if x >= 0.0 && x <= window.w {
         graphics::draw(
           ctx,
