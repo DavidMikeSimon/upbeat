@@ -28,7 +28,7 @@ use counting_source::CountingSource;
 
 const MIDI_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.mid";
 const OGG_PATH: &str = "resources/music/weeppiko_musix_-_were_fighting_again.ogg";
-const TARGET_TRACK: usize = 10;
+const TARGET_TRACKS: [usize; 2] = [10, 28];
 const LEAD_IN_MSEC: u32 = 1000;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -89,17 +89,19 @@ fn get_timing(midi: &Smf) -> MidiTiming {
 }
 
 fn get_pattern(midi: &Smf, timing: &MidiTiming) -> Vec<PatternNote> {
-  midi.tracks[TARGET_TRACK]
+  TARGET_TRACKS
     .iter()
-    .scan(0.0, |time, &event| {
-      *time = *time + event.delta.as_int() as f32 * timing.ms_per_tick;
+    .flat_map(|&track_idx| {
+      midi.tracks[track_idx].iter().scan(0.0, |time, &event| {
+        *time = *time + event.delta.as_int() as f32 * timing.ms_per_tick;
 
-      match event.kind {
-        EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
-          Some(Some((time.clone(), pitch.as_int())))
-        },
-        _ => Some(None) // Ignore events other than NoteOn
-      }
+        match event.kind {
+          EventKind::Midi{ message: MidiMessage::NoteOn { key: pitch, .. }, .. } => {
+            Some(Some((time.clone(), pitch.as_int())))
+          },
+          _ => Some(None) // Ignore events other than NoteOn
+        }
+      })
     })
     .flatten()
     .group_by(|(time, _)| time.clone())
@@ -421,8 +423,8 @@ impl event::EventHandler for State {
     ).unwrap();
 
     let spacing_per_second = window.w/5.0;
-    let music_bar_min_pitch = 55;
-    let music_bar_max_pitch = 75;
+    let music_bar_min_pitch = 45;
+    let music_bar_max_pitch = 95;
 
     let completion_offset_x: f32 = (time as f32 - (LEAD_IN_MSEC - self.lead_in_offset_ms.load(Ordering::Relaxed)) as f32)/1000.0 * spacing_per_second;
 
