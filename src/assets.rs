@@ -24,6 +24,7 @@ pub struct Assets {
   pub now_line: graphics::Mesh,
 
   pub measure_line: graphics::Mesh,
+  pub measure_action_indicator: graphics::Mesh,
 
   pub arrow_width: f32,
   pub up_arrow: graphics::Mesh,
@@ -100,6 +101,14 @@ impl Assets {
       graphics::Color::from_rgb(64, 64, 64)
     ).unwrap();
 
+    let measure_action_indicator = graphics::Mesh::new_circle(
+      ctx,
+      graphics::DrawMode::fill(),
+      Point2::new(0.0, 0.0),
+      10.0,
+      0.1,
+      graphics::Color::from_rgba(255, 0, 255, 128)
+    ).unwrap();
 
     let arrow_width = 20.0;
     let arrow_height = 10.0;
@@ -150,6 +159,7 @@ impl Assets {
       now_line: now_line,
 
       measure_line: measure_line,
+      measure_action_indicator: measure_action_indicator,
 
       arrow_width: arrow_width,
       up_arrow: up_arrow,
