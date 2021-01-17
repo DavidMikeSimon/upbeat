@@ -220,9 +220,10 @@ impl State {
         },
       ],
       actions: hashmap![
-        0 => CombatAction::AttackHero,
         2 => CombatAction::AttackHero,
         4 => CombatAction::AttackHero,
+        6 => CombatAction::AttackHero,
+        8 => CombatAction::AttackHero,
       ],
       command_window_hero: 0,
       last_measure_action_processed: None
@@ -355,35 +356,6 @@ impl event::EventHandler for State {
       ).unwrap();
     }
 
-    // for action in &self.actions {
-    //   match action.action_type {
-    //     CombatAction::AttackHero => {
-    //       if action.resolved {
-    //         graphics::draw(
-    //           ctx,
-    //           &self.assets.after_attack_effect,
-    //           graphics::DrawParam::default().dest(self.heroes[0].position + Vector2::new(45.0, 90.0))
-    //         ).unwrap();
-    //       } else {
-    //         let line = graphics::Mesh::new_line(
-    //           ctx,
-    //           &[
-    //             self.enemies[0].position + Vector2::new(220.0, 165.0),
-    //             self.heroes[0].position + Vector2::new(45.0, 90.0),
-    //           ],
-    //           20.0,
-    //           graphics::Color::from_rgba(255, 0, 0, 128)
-    //         ).unwrap();
-    //         graphics::draw(
-    //           ctx,
-    //           &line,
-    //           graphics::DrawParam::default()
-    //         ).unwrap()
-    //       }
-    //     }
-    //   }
-    // }
-
     graphics::draw(
       ctx,
       &self.assets.music_bar,
@@ -414,12 +386,41 @@ impl event::EventHandler for State {
           graphics::DrawParam::default().dest(Point2::new(x, window.h - self.assets.music_bar_height))
         ).unwrap();
 
-        if let Some(_action) = self.actions.get(&measure_idx) {
+        if let Some(action) = self.actions.get(&measure_idx) {
           graphics::draw(
             ctx,
             &self.assets.measure_action_indicator,
             graphics::DrawParam::default().dest(Point2::new(x, window.h - (self.assets.music_bar_height + 20.0)))
           ).unwrap();
+
+          let action_time = (measure_idx as u32) * (self.timing.beats_per_measure * self.timing.ms_per_beat) as u32;
+
+          match action {
+            CombatAction::AttackHero => {
+              if time + 400 > action_time && time < action_time {
+                let line = graphics::Mesh::new_line(
+                  ctx,
+                  &[
+                    self.enemies[0].position + Vector2::new(220.0, 165.0),
+                    self.heroes[0].position + Vector2::new(45.0, 90.0),
+                  ],
+                  20.0,
+                  graphics::Color::from_rgba(255, 0, 0, 128)
+                ).unwrap();
+                graphics::draw(
+                  ctx,
+                  &line,
+                  graphics::DrawParam::default()
+                ).unwrap()
+              } else if time > action_time && time < action_time + 400 {
+                graphics::draw(
+                  ctx,
+                  &self.assets.after_attack_effect,
+                  graphics::DrawParam::default().dest(self.heroes[0].position + Vector2::new(45.0, 90.0))
+                ).unwrap();
+              }
+            }
+          }
         }
       }
     }
