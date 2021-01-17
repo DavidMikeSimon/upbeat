@@ -1,3 +1,5 @@
+#[macro_use] extern crate maplit;
+
 extern crate ggez;
 extern crate itertools;
 extern crate nalgebra;
@@ -8,6 +10,7 @@ mod assets;
 mod counting_source;
 
 use std::{
+  collections::HashMap,
   convert::TryFrom,
   env,
   fs,
@@ -157,13 +160,8 @@ struct EnemyState {
   attack_power: u32,
 }
 
-enum CombatActionType {
+enum CombatAction {
   AttackHero
-}
-
-struct CombatAction {
-  measure_idx: usize,
-  action_type: CombatActionType,
 }
 
 struct State {
@@ -177,7 +175,7 @@ struct State {
   sink: Sink,
   heroes: Vec<HeroState>,
   enemies: Vec<EnemyState>,
-  actions: Vec<CombatAction>,
+  actions: HashMap<usize, CombatAction>,
   command_window_hero: usize,
   last_measure_action_processed: Option<usize>,
 }
@@ -221,10 +219,10 @@ impl State {
           attack_power: 20
         },
       ],
-      actions: vec![
-        CombatAction { measure_idx: 0, action_type: CombatActionType::AttackHero },
-        CombatAction { measure_idx: 2, action_type: CombatActionType::AttackHero },
-        CombatAction { measure_idx: 4, action_type: CombatActionType::AttackHero },
+      actions: hashmap![
+        0 => CombatAction::AttackHero,
+        2 => CombatAction::AttackHero,
+        4 => CombatAction::AttackHero,
       ],
       command_window_hero: 0,
       last_measure_action_processed: None
@@ -285,10 +283,10 @@ impl event::EventHandler for State {
       Some(last_measure_processed_idx) => current_measure_idx > last_measure_processed_idx
     };
     if is_next_measure {
-      match self.actions.iter().find(|action| action.measure_idx == current_measure_idx) {
-        None => {}
-        Some(action) => match action.action_type {
-          CombatActionType::AttackHero => {
+      match self.actions.get(&current_measure_idx) {
+        None => {},
+        Some(action) => match action {
+          CombatAction::AttackHero => {
             if self.heroes[0].hp > 0 {
               self.heroes[0].hp -= std::cmp::min(self.enemies[0].attack_power, self.heroes[0].hp);
             }
@@ -359,7 +357,7 @@ impl event::EventHandler for State {
 
     // for action in &self.actions {
     //   match action.action_type {
-    //     CombatActionType::AttackHero => {
+    //     CombatAction::AttackHero => {
     //       if action.resolved {
     //         graphics::draw(
     //           ctx,
