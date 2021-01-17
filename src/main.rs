@@ -413,6 +413,14 @@ impl event::EventHandler for State {
           &self.assets.measure_line,
           graphics::DrawParam::default().dest(Point2::new(x, window.h - self.assets.music_bar_height))
         ).unwrap();
+
+        if let Some(_action) = self.actions.get(&measure_idx) {
+          graphics::draw(
+            ctx,
+            &self.assets.measure_action_indicator,
+            graphics::DrawParam::default().dest(Point2::new(x, window.h - (self.assets.music_bar_height + 20.0)))
+          ).unwrap();
+        }
       }
     }
 
