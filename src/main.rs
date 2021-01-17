@@ -136,7 +136,7 @@ enum NavDirection {
   Up,
   Right,
   Down,
-  Left
+  Left,
 }
 
 struct RelativePitchInput {
@@ -149,14 +149,12 @@ struct HeroState {
   idx: usize,
   position: Point2<f32>,
   hp: u32,
-  max_hp: u32
+  max_hp: u32,
 }
 
 struct EnemyState {
   position: Point2<f32>,
-  next_move_time: u32,
-  ms_between_moves: u32,
-  attack_power: u32
+  attack_power: u32,
 }
 
 enum CombatActionType {
@@ -164,10 +162,8 @@ enum CombatActionType {
 }
 
 struct CombatAction {
+  measure_idx: usize,
   action_type: CombatActionType,
-  resolve_at: u32,
-  resolved: bool,
-  remove_at: u32
 }
 
 struct State {
@@ -183,6 +179,7 @@ struct State {
   enemies: Vec<EnemyState>,
   actions: Vec<CombatAction>,
   command_window_hero: usize,
+  last_measure_action_processed: Option<usize>,
 }
 
 impl State {
@@ -221,13 +218,16 @@ impl State {
       enemies: vec![
         EnemyState {
           position: Point2::new(644.0, 85.0),
-          next_move_time: 5000,
-          ms_between_moves: 5000,
           attack_power: 20
         },
       ],
-      actions: Vec::new(),
-      command_window_hero: 0
+      actions: vec![
+        CombatAction { measure_idx: 0, action_type: CombatActionType::AttackHero },
+        CombatAction { measure_idx: 2, action_type: CombatActionType::AttackHero },
+        CombatAction { measure_idx: 4, action_type: CombatActionType::AttackHero },
+      ],
+      command_window_hero: 0,
+      last_measure_action_processed: None
     }
   }
 
@@ -279,25 +279,15 @@ impl event::EventHandler for State {
 
     let time = self.time.load(Ordering::Relaxed);
 
-    for enemy in &mut self.enemies {
-      while enemy.next_move_time < time {
-        if self.heroes[0].hp > 0 {
-          self.actions.push(CombatAction{
-            action_type: CombatActionType::AttackHero,
-            resolve_at: time + 400,
-            resolved: false,
-            remove_at: time + 800
-          });
-        }
-        enemy.next_move_time += enemy.ms_between_moves;
-      }
-    }
-
-    let mut action_indexes_to_delete: Vec<usize> = Vec::new();
-    for action in &mut self.actions {
-      if !action.resolved && action.resolve_at < time {
-        action.resolved = true;
-        match action.action_type {
+    let current_measure_idx = (time as usize)/((self.timing.beats_per_measure * self.timing.ms_per_beat).trunc() as usize);
+    let is_next_measure = match self.last_measure_action_processed {
+      None => true,
+      Some(last_measure_processed_idx) => current_measure_idx > last_measure_processed_idx
+    };
+    if is_next_measure {
+      match self.actions.iter().find(|action| action.measure_idx == current_measure_idx) {
+        None => {}
+        Some(action) => match action.action_type {
           CombatActionType::AttackHero => {
             if self.heroes[0].hp > 0 {
               self.heroes[0].hp -= std::cmp::min(self.enemies[0].attack_power, self.heroes[0].hp);
@@ -305,16 +295,8 @@ impl event::EventHandler for State {
           }
         }
       }
-    }
 
-    for (idx, action) in self.actions.iter().enumerate() {
-      if action.remove_at < time {
-        action_indexes_to_delete.push(idx);
-      }
-    }
-
-    for &idx in action_indexes_to_delete.iter().rev() {
-      self.actions.remove(idx);
+      self.last_measure_action_processed = Some(current_measure_idx)
     }
 
     if let Some(input) = &self.relative_pitch_input {
@@ -326,10 +308,6 @@ impl event::EventHandler for State {
       let nearest_note_offset_ms: i32 = i32::try_from(input.time).unwrap() - i32::try_from(nearest_pattern_note.time).unwrap();
       let relative_pitch_ok = input.relative_pitch == nearest_pattern_note.relative_pitch;
       println!("MATCH {:5}: {:+4}msec (T:{:+7})", relative_pitch_ok, nearest_note_offset_ms, nearest_pattern_note.time);
-
-      if input.direction == NavDirection::Down {
-        self.command_window_hero = (self.command_window_hero + 1) % self.heroes.len();
-      }
 
       self.relative_pitch_input = None;
     }
@@ -379,34 +357,34 @@ impl event::EventHandler for State {
       ).unwrap();
     }
 
-    for action in &self.actions {
-      match action.action_type {
-        CombatActionType::AttackHero => {
-          if action.resolved {
-            graphics::draw(
-              ctx,
-              &self.assets.after_attack_effect,
-              graphics::DrawParam::default().dest(self.heroes[0].position + Vector2::new(45.0, 90.0))
-            ).unwrap();
-          } else {
-            let line = graphics::Mesh::new_line(
-              ctx,
-              &[
-                self.enemies[0].position + Vector2::new(220.0, 165.0),
-                self.heroes[0].position + Vector2::new(45.0, 90.0),
-              ],
-              20.0,
-              graphics::Color::from_rgba(255, 0, 0, 128)
-            ).unwrap();
-            graphics::draw(
-              ctx,
-              &line,
-              graphics::DrawParam::default()
-            ).unwrap()
-          }
-        }
-      }
-    }
+    // for action in &self.actions {
+    //   match action.action_type {
+    //     CombatActionType::AttackHero => {
+    //       if action.resolved {
+    //         graphics::draw(
+    //           ctx,
+    //           &self.assets.after_attack_effect,
+    //           graphics::DrawParam::default().dest(self.heroes[0].position + Vector2::new(45.0, 90.0))
+    //         ).unwrap();
+    //       } else {
+    //         let line = graphics::Mesh::new_line(
+    //           ctx,
+    //           &[
+    //             self.enemies[0].position + Vector2::new(220.0, 165.0),
+    //             self.heroes[0].position + Vector2::new(45.0, 90.0),
+    //           ],
+    //           20.0,
+    //           graphics::Color::from_rgba(255, 0, 0, 128)
+    //         ).unwrap();
+    //         graphics::draw(
+    //           ctx,
+    //           &line,
+    //           graphics::DrawParam::default()
+    //         ).unwrap()
+    //       }
+    //     }
+    //   }
+    // }
 
     graphics::draw(
       ctx,
