@@ -48,7 +48,7 @@ impl Assets {
       Point2::new(0.0, 0.0),
       50.0,
       0.1,
-      graphics::Color::from_rgba(255, 0, 0, 128)
+      graphics::Color::from_rgb(255, 255, 255)
     ).unwrap();
 
     let button_width = 60.0;
@@ -107,7 +107,7 @@ impl Assets {
       Point2::new(0.0, 0.0),
       10.0,
       0.1,
-      graphics::Color::from_rgba(255, 0, 255, 128)
+      graphics::Color::from_rgb(255, 255, 255)
     ).unwrap();
 
     let arrow_width = 20.0;

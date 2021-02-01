@@ -145,12 +145,13 @@ enum NavDirection {
 struct RelativePitchInput {
   direction: NavDirection,
   relative_pitch: RelativePitch,
-  time: u32
+  time: u32,
 }
 
 struct HeroState {
-  idx: usize,
+  character: usize,
   position: Point2<f32>,
+  attack_power: u32,
   hp: u32,
   max_hp: u32,
 }
@@ -158,10 +159,22 @@ struct HeroState {
 struct EnemyState {
   position: Point2<f32>,
   attack_power: u32,
+  hp: u32,
+  max_hp: u32,
+}
+
+enum ActionSource {
+  Hero { idx: usize },
+  Enemy { idx: usize },
+}
+
+enum ActionTarget {
+  Hero { idx: usize },
+  Enemy { idx: usize },
 }
 
 enum CombatAction {
-  AttackHero
+  Attack { src: ActionSource, tgt: ActionTarget }
 }
 
 struct State {
@@ -210,20 +223,38 @@ impl State {
       pattern: pattern,
       sink: sink,
       heroes: vec![
-        HeroState { idx: 0, position: Point2::new(260.0, 125.0), hp: 180, max_hp: 180 },
-        HeroState { idx: 1, position: Point2::new(390.0, 280.0), hp: 220, max_hp: 220 },
+        HeroState {
+          character: 0,
+          position: Point2::new(260.0, 125.0),
+          attack_power: 50,
+          hp: 180,
+          max_hp: 180
+        },
+        HeroState {
+          character: 1,
+          position: Point2::new(390.0, 280.0),
+          attack_power: 60,
+          hp: 220,
+          max_hp: 220
+        },
+
       ],
       enemies: vec![
         EnemyState {
           position: Point2::new(644.0, 85.0),
-          attack_power: 20
+          attack_power: 80,
+          hp: 400,
+          max_hp: 400,
         },
       ],
       actions: hashmap![
-        2 => CombatAction::AttackHero,
-        4 => CombatAction::AttackHero,
-        6 => CombatAction::AttackHero,
-        8 => CombatAction::AttackHero,
+        2 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
+        3 => CombatAction::Attack{src: ActionSource::Hero{idx: 0}, tgt: ActionTarget::Enemy{idx: 0}},
+        4 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 1}},
+        5 => CombatAction::Attack{src: ActionSource::Hero{idx: 1}, tgt: ActionTarget::Enemy{idx: 0}},
+        6 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
+        7 => CombatAction::Attack{src: ActionSource::Hero{idx: 1}, tgt: ActionTarget::Enemy{idx: 0}},
+        8 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 1}},
       ],
       command_window_hero: 0,
       last_measure_action_processed: None
@@ -232,9 +263,6 @@ impl State {
 
   fn draw_command_window(&self, ctx: &mut Context, hero: &HeroState) {
     let mut center_point = Point2::new(hero.position.x + 25.0, hero.position.y + 40.0);
-    if hero.idx == 0 {
-      center_point.x -= 10.0;
-    }
 
     graphics::draw(
       ctx,
@@ -287,9 +315,23 @@ impl event::EventHandler for State {
       match self.actions.get(&current_measure_idx) {
         None => {},
         Some(action) => match action {
-          CombatAction::AttackHero => {
-            if self.heroes[0].hp > 0 {
-              self.heroes[0].hp -= std::cmp::min(self.enemies[0].attack_power, self.heroes[0].hp);
+          CombatAction::Attack{ src, tgt } => {
+            let attack_power = match *src {
+              ActionSource::Hero{ idx } => self.heroes[idx].attack_power,
+              ActionSource::Enemy{ idx } => self.enemies[idx].attack_power
+            };
+
+            match *tgt {
+              ActionTarget::Hero{ idx } => {
+                if self.heroes[idx].hp > 0 {
+                  self.heroes[idx].hp -= std::cmp::min(attack_power, self.heroes[0].hp);
+                }
+              },
+              ActionTarget::Enemy { idx }=> {
+                if self.enemies[idx].hp > 0 {
+                  self.enemies[idx].hp -= std::cmp::min(attack_power, self.enemies[0].hp);
+                }
+              },
             }
           }
         }
@@ -326,25 +368,25 @@ impl event::EventHandler for State {
       graphics::DrawParam::default()
     ).unwrap();
 
-    for hero in &self.heroes {
+    for (i, hero) in self.heroes.iter().enumerate() {
       graphics::draw(
         ctx,
-        match hero.idx {
+        match hero.character {
           0 => &self.assets.char1,
           1 => &self.assets.char2,
-          _ => panic!("Unknown hero idx")
+          _ => panic!("Unknown hero character idx")
         },
         graphics::DrawParam::default().dest(hero.position).scale(Vector2::new(0.5, 0.5))
       ).unwrap();
 
-      if self.command_window_hero == hero.idx {
+      if self.command_window_hero == i {
         self.draw_command_window(ctx, &hero);
       }
 
       graphics::draw(
         ctx,
-        &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 20.0)),
-        graphics::DrawParam::default().dest(hero.position + Vector2::new(-250.0, 100.0))
+        &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 30.0)),
+        graphics::DrawParam::default().dest(hero.position + Vector2::new(0.0, 200.0))
       ).unwrap();
     }
 
@@ -353,6 +395,12 @@ impl event::EventHandler for State {
         ctx,
         &self.assets.monster,
         graphics::DrawParam::default().dest(enemy.position)
+      ).unwrap();
+
+      graphics::draw(
+        ctx,
+        &graphics::Text::new((format!("HP: {}/{}", enemy.hp, enemy.max_hp), self.assets.font, 30.0)),
+        graphics::DrawParam::default().dest(enemy.position + Vector2::new(200.0, 300.0))
       ).unwrap();
     }
 
@@ -387,25 +435,45 @@ impl event::EventHandler for State {
         ).unwrap();
 
         if let Some(action) = self.actions.get(&measure_idx) {
+          let action_indicator_color = match action {
+            CombatAction::Attack { src: ActionSource::Hero { .. }, .. } => graphics::Color::from_rgba(0, 0, 255, 128),
+            CombatAction::Attack { src: ActionSource::Enemy { .. }, .. } => graphics::Color::from_rgba(255, 0, 0, 128),
+            _ => graphics::Color::from_rgba(255, 0, 255, 128),
+          };
+
           graphics::draw(
             ctx,
             &self.assets.measure_action_indicator,
-            graphics::DrawParam::default().dest(Point2::new(x, window.h - (self.assets.music_bar_height + 20.0)))
+            graphics::DrawParam::default()
+              .dest(Point2::new(x, window.h - (self.assets.music_bar_height + 20.0)))
+              .color(action_indicator_color)
           ).unwrap();
 
           let action_time = (measure_idx as u32) * (self.timing.beats_per_measure * self.timing.ms_per_beat) as u32;
 
           match action {
-            CombatAction::AttackHero => {
+            CombatAction::Attack { src, tgt } => {
+              let src_pos = match *src {
+                ActionSource::Hero{ idx } => self.heroes[idx].position + Vector2::new(100.0, 90.0),
+                ActionSource::Enemy{ idx } => self.enemies[idx].position + Vector2::new(220.0, 165.0),
+              };
+
+              let tgt_pos = match *tgt {
+                ActionTarget::Hero{ idx } => self.heroes[idx].position + Vector2::new(45.0, 90.0),
+                ActionTarget::Enemy{ idx } => self.enemies[idx].position + Vector2::new(180.0, 145.0),
+              };
+
+              let color = match src {
+                ActionSource::Hero{ .. } => graphics::Color::from_rgba(0, 0, 255, 192),
+                ActionSource::Enemy{ .. } => graphics::Color::from_rgba(255, 0, 0, 128),
+              };
+
               if time + 400 > action_time && time < action_time {
                 let line = graphics::Mesh::new_line(
                   ctx,
-                  &[
-                    self.enemies[0].position + Vector2::new(220.0, 165.0),
-                    self.heroes[0].position + Vector2::new(45.0, 90.0),
-                  ],
+                  &[src_pos, tgt_pos],
                   20.0,
-                  graphics::Color::from_rgba(255, 0, 0, 128)
+                  color
                 ).unwrap();
                 graphics::draw(
                   ctx,
@@ -416,7 +484,7 @@ impl event::EventHandler for State {
                 graphics::draw(
                   ctx,
                   &self.assets.after_attack_effect,
-                  graphics::DrawParam::default().dest(self.heroes[0].position + Vector2::new(45.0, 90.0))
+                  graphics::DrawParam::default().dest(tgt_pos).color(color)
                 ).unwrap();
               }
             }
