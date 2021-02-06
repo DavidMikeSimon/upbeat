@@ -2293,7 +2293,6 @@ version = "0.1.0"
 dependencies = [
  "ggez",
  "itertools",
- "lazy_static",
  "maplit",
  "midly",
  "nalgebra",

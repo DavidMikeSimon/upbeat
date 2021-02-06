@@ -185,6 +185,7 @@ enum CombatAction {
 
 struct State {
   assets: Assets,
+  bg_anims: Vec<anim::Animation>,
   dt: Duration,
   time: Arc<AtomicU32>,
   lead_in_offset_ms: Arc<AtomicU32>,
@@ -220,8 +221,15 @@ impl State {
     sink.append(lead_in_source);
     sink.append(music_source);
 
+    let assets = Assets::new(ctx);
+
+    let bg_anims = vec!(
+      anim::Animation::new(assets.left_bush_anim.clone()),
+    );
+
     State {
-      assets: Assets::new(ctx),
+      assets: assets,
+      bg_anims: bg_anims,
       dt: Duration::default(),
       time: time,
       lead_in_offset_ms: lead_in_offset_ms,
@@ -374,6 +382,14 @@ impl event::EventHandler for State {
       &self.assets.bg,
       graphics::DrawParam::default()
     ).unwrap();
+
+    for anim in self.bg_anims.iter() {
+      graphics::draw(
+        ctx,
+        anim.get_frame(time, self.timing.ms_per_beat),
+        graphics::DrawParam::default().dest(Point2::<f32>::new(0.0, 100.0))
+      ).unwrap();
+    }
 
     for (i, hero) in self.heroes.iter().enumerate() {
       graphics::draw(

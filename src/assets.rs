@@ -1,3 +1,5 @@
+use std::{rc::Rc};
+
 use ggez::{graphics, Context};
 use nalgebra::{Point2};
 
@@ -10,6 +12,8 @@ pub struct Assets {
   pub char1: graphics::Image,
   pub char2: graphics::Image,
   pub monster: graphics::Image,
+
+  pub left_bush_anim: Rc<anim::AnimAsset>,
 
   pub after_attack_effect: graphics::Mesh,
 
@@ -47,7 +51,7 @@ impl Assets {
     let left_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left bush", anim::AnimSettings{
       initial_offset_beats: 0,
       play_interval_beats: 4,
-      length_ms: 500,
+      length_ms: 300,
       beat_offset_ms: 0,
     }).unwrap();
 
@@ -151,6 +155,8 @@ impl Assets {
       char1: char1,
       char2: char2,
       monster: monster,
+
+      left_bush_anim: Rc::new(left_bush_anim),
 
       after_attack_effect: after_attack_effect,
 
