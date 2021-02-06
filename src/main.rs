@@ -2,10 +2,11 @@
 
 extern crate ggez;
 extern crate itertools;
+extern crate midly;
 extern crate nalgebra;
 extern crate rodio;
-extern crate midly;
 
+mod anim;
 mod assets;
 mod counting_source;
 
@@ -66,18 +67,23 @@ fn get_timing(midi: &Smf) -> MidiTiming {
   let ticks_per_beat: f64 = ticks_per_beat.into();
 
   let mut microseconds_per_beat = 0;
-  let mut beats_per_measure = 0;
+  let mut beats_per_measure: Option<u8> = None;
   for event in &midi.tracks[0] { // Track 0 is the global timing track
     match event.kind {
       EventKind::Meta(MetaMessage::Tempo(mspb)) => {
         microseconds_per_beat = mspb.as_int();
       },
       EventKind::Meta(MetaMessage::TimeSignature(numerator, _, _, _)) => {
-        beats_per_measure = numerator;
+        beats_per_measure = match beats_per_measure {
+          None => Some(numerator),
+          Some(n) if n == numerator => Some(numerator),
+          _ => panic!("Multiple conflicting time signatures found"),
+        }
       },
       _ => {}
     }
   }
+  let beats_per_measure = beats_per_measure.unwrap_or_else(|| panic!("No time signature found"));
   if microseconds_per_beat == 0 {
     panic!("MIDI track 0 must include tempo information");
   }
@@ -201,6 +207,7 @@ impl State {
     let pattern = get_pattern(&midi, &timing);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
+    sink.set_volume(0.0);
     sink.pause();
 
     let ogg_file = fs::File::open(OGG_PATH).unwrap();
@@ -262,7 +269,7 @@ impl State {
   }
 
   fn draw_command_window(&self, ctx: &mut Context, hero: &HeroState) {
-    let mut center_point = Point2::new(hero.position.x + 25.0, hero.position.y + 40.0);
+    let center_point = Point2::new(hero.position.x + 25.0, hero.position.y + 40.0);
 
     graphics::draw(
       ctx,
@@ -438,7 +445,6 @@ impl event::EventHandler for State {
           let action_indicator_color = match action {
             CombatAction::Attack { src: ActionSource::Hero { .. }, .. } => graphics::Color::from_rgba(0, 0, 255, 128),
             CombatAction::Attack { src: ActionSource::Enemy { .. }, .. } => graphics::Color::from_rgba(255, 0, 0, 128),
-            _ => graphics::Color::from_rgba(255, 0, 255, 128),
           };
 
           graphics::draw(

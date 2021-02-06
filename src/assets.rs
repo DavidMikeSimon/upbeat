@@ -1,6 +1,8 @@
 use ggez::{graphics, Context};
 use nalgebra::{Point2};
 
+use crate::anim;
+
 pub struct Assets {
   pub font: graphics::Font,
 
@@ -41,6 +43,13 @@ impl Assets {
     let char1 = graphics::Image::new(ctx, "/images/char1.png").unwrap();
     let char2 = graphics::Image::new(ctx, "/images/char2.png").unwrap();
     let monster = graphics::Image::new(ctx, "/images/monster.png").unwrap();
+
+    let left_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left bush", anim::AnimSettings{
+      initial_offset_beats: 0,
+      play_interval_beats: 4,
+      length_ms: 500,
+      beat_offset_ms: 0,
+    }).unwrap();
 
     let after_attack_effect = graphics::Mesh::new_circle(
       ctx,
