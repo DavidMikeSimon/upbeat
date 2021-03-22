@@ -18,6 +18,10 @@ pub struct Assets {
   pub dirt_anim: Rc<anim::AnimAsset>,
 
   pub left_bush_anim: Rc<anim::AnimAsset>,
+  pub right_bush_anim: Rc<anim::AnimAsset>,
+  pub left_tree_anim: Rc<anim::AnimAsset>,
+  pub right_tree_anim: Rc<anim::AnimAsset>,
+  pub wind_anim: Rc<anim::AnimAsset>,
 
   pub after_attack_effect: graphics::Mesh,
 
@@ -57,6 +61,34 @@ impl Assets {
     let dirt_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/dirt.png", anim::AnimSettings::default()).unwrap();
 
     let left_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left bush", anim::AnimSettings{
+      initial_offset_beats: 0,
+      play_interval_beats: 4,
+      length_ms: 400,
+      beat_offset_ms: 0,
+    }).unwrap();
+
+    let right_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/right bush", anim::AnimSettings{
+      initial_offset_beats: 0,
+      play_interval_beats: 4,
+      length_ms: 400,
+      beat_offset_ms: 0,
+    }).unwrap();
+
+    let left_tree_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left tree", anim::AnimSettings{
+      initial_offset_beats: 0,
+      play_interval_beats: 4,
+      length_ms: 400,
+      beat_offset_ms: 0,
+    }).unwrap();
+
+    let right_tree_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/right tree", anim::AnimSettings{
+      initial_offset_beats: 0,
+      play_interval_beats: 4,
+      length_ms: 400,
+      beat_offset_ms: 0,
+    }).unwrap();
+
+    let wind_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/wind", anim::AnimSettings{
       initial_offset_beats: 0,
       play_interval_beats: 4,
       length_ms: 400,
@@ -167,7 +199,12 @@ impl Assets {
       grass_anim: Rc::new(grass_anim),
       rocks_anim: Rc::new(rocks_anim),
       dirt_anim: Rc::new(dirt_anim),
+
+      left_tree_anim: Rc::new(left_tree_anim),
+      right_tree_anim: Rc::new(right_tree_anim),
       left_bush_anim: Rc::new(left_bush_anim),
+      right_bush_anim: Rc::new(right_bush_anim),
+      wind_anim: Rc::new(wind_anim),
 
       after_attack_effect: after_attack_effect,
 

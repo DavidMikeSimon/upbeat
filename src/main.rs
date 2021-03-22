@@ -241,6 +241,16 @@ impl State {
         scale: Vector2::<f32>::new(1.0, 1.0),
       },
       BgAnim {
+        animation: anim::Animation::new(assets.left_tree_anim.clone()),
+        position: Point2::<f32>::new(0.0, 0.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.right_tree_anim.clone()),
+        position: Point2::<f32>::new(574.0, 0.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
         animation: anim::Animation::new(assets.rocks_anim.clone()),
         position: Point2::<f32>::new(79.0, 342.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
@@ -252,9 +262,19 @@ impl State {
       },
       BgAnim {
         animation: anim::Animation::new(assets.left_bush_anim.clone()),
-        position: Point2::<f32>::new(0.0, 374.46),
+        position: Point2::<f32>::new(0.0, 374.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
-      }
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.right_bush_anim.clone()),
+        position: Point2::<f32>::new(805.0, 460.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.wind_anim.clone()),
+        position: Point2::<f32>::new(0.0, 360.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
     );
 
     State {
