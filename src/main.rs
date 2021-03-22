@@ -21,7 +21,7 @@ use std::{
   sync::{Arc, atomic::{AtomicU32, Ordering}},
 };
 
-use ggez::{conf, event, graphics, timer, input::keyboard::{KeyCode, KeyMods}, Context, GameResult};
+use ggez::{conf, event, event::{MouseButton}, graphics, timer, input::keyboard::{KeyCode, KeyMods}, input::mouse, Context, GameResult};
 use itertools::Itertools;
 use rodio::{Sink, Source};
 use midly::{Smf, Format, EventKind, MidiMessage, MetaMessage, Timing};
@@ -188,7 +188,8 @@ enum CombatAction {
 struct BgAnim {
   animation: anim::Animation,
   position: Point2<f32>,
-  scale: Vector2<f32>
+  scale: Vector2<f32>,
+  distance: f32
 }
 
 struct State {
@@ -206,6 +207,8 @@ struct State {
   actions: HashMap<usize, CombatAction>,
   command_window_hero: usize,
   last_measure_action_processed: Option<usize>,
+  camera_offset: Vector2<f32>,
+  camera_zoom: f32,
 }
 
 impl State {
@@ -236,46 +239,55 @@ impl State {
         animation: anim::Animation::new(assets.sky_anim.clone()),
         position: Point2::<f32>::new(0.0, 0.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 3.0,
       },
       BgAnim {
         animation: anim::Animation::new(assets.grass_anim.clone()),
         position: Point2::<f32>::new(0.0, 5.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 2.0,
       },
       BgAnim {
         animation: anim::Animation::new(assets.left_tree_anim.clone()),
         position: Point2::<f32>::new(0.0, 0.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 1.5,
       },
       BgAnim {
         animation: anim::Animation::new(assets.right_tree_anim.clone()),
         position: Point2::<f32>::new(574.0, 0.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 1.5,
       },
       BgAnim {
         animation: anim::Animation::new(assets.rocks_anim.clone()),
         position: Point2::<f32>::new(79.0, 342.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 1.0,
       },
       BgAnim {
         animation: anim::Animation::new(assets.dirt_anim.clone()),
         position: Point2::<f32>::new(0.0, 355.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 0.7,
       },
       BgAnim {
         animation: anim::Animation::new(assets.left_bush_anim.clone()),
         position: Point2::<f32>::new(0.0, 374.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 0.5,
       },
       BgAnim {
         animation: anim::Animation::new(assets.right_bush_anim.clone()),
         position: Point2::<f32>::new(805.0, 460.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 0.5,
       },
       BgAnim {
         animation: anim::Animation::new(assets.wind_anim.clone()),
         position: Point2::<f32>::new(0.0, 360.0),
         scale: Vector2::<f32>::new(1.0, 1.0),
+        distance: 0.5,
       },
     );
 
@@ -316,7 +328,9 @@ impl State {
         8 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
       ],
       command_window_hero: 0,
-      last_measure_action_processed: None
+      last_measure_action_processed: None,
+      camera_offset: Vector2::new(0.0, 0.0),
+      camera_zoom: 1.0,
     }
   }
 
@@ -353,6 +367,14 @@ impl State {
       graphics::DrawParam::default().dest(center_point + Vector2::new(-self.assets.button_width, 10.0))
     ).unwrap();
 
+  }
+
+  fn camera_point(&self, distance: f32, point: Point2<f32>) -> Point2<f32> {
+    (point - (self.camera_offset * 1.0/distance)) * self.camera_zoom
+  }
+
+  fn camera_scale(&self, distance: f32, scale: Vector2<f32>) -> Vector2<f32> {
+    scale * self.camera_zoom
   }
 }
 
@@ -426,7 +448,9 @@ impl event::EventHandler for State {
         graphics::draw(
           ctx,
           img,
-          graphics::DrawParam::default().dest(bg_anim.position).scale(bg_anim.scale)
+          graphics::DrawParam::default()
+            .dest(self.camera_point(bg_anim.distance, bg_anim.position))
+            .scale(self.camera_scale(bg_anim.distance, bg_anim.scale))
         ).unwrap();
       }
     }
@@ -439,17 +463,21 @@ impl event::EventHandler for State {
           1 => &self.assets.char2,
           _ => panic!("Unknown hero character idx")
         },
-        graphics::DrawParam::default().dest(hero.position)
+        graphics::DrawParam::default()
+          .dest(self.camera_point(1.0, hero.position))
+          .scale(self.camera_scale(1.0, Vector2::new(1.0, 1.0)))
       ).unwrap();
 
       if self.command_window_hero == i {
-        self.draw_command_window(ctx, &hero);
+        //self.draw_command_window(ctx, &hero);
       }
 
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 30.0)),
-        graphics::DrawParam::default().dest(hero.position + Vector2::new(60.0, 400.0)).color(graphics::BLACK)
+        graphics::DrawParam::default()
+          .dest(self.camera_point(1.0, hero.position) + self.camera_scale(1.0, Vector2::new(60.0, 400.0)))
+          .color(graphics::BLACK)
       ).unwrap();
     }
 
@@ -457,13 +485,17 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         &self.assets.monster,
-        graphics::DrawParam::default().dest(enemy.position)
+        graphics::DrawParam::default()
+          .dest(self.camera_point(1.0, enemy.position))
+          .scale(self.camera_scale(1.0, Vector2::new(1.0, 1.0)))
       ).unwrap();
 
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", enemy.hp, enemy.max_hp), self.assets.font, 30.0)),
-        graphics::DrawParam::default().dest(enemy.position + Vector2::new(200.0, 300.0)).color(graphics::BLACK)
+        graphics::DrawParam::default()
+          .dest(self.camera_point(1.0, enemy.position) + self.camera_scale(1.0, Vector2::new(200.0, 300.0)))
+          .color(graphics::BLACK)
       ).unwrap();
     }
 
@@ -533,7 +565,7 @@ impl event::EventHandler for State {
               if time + 400 > action_time && time < action_time {
                 let line = graphics::Mesh::new_line(
                   ctx,
-                  &[src_pos, tgt_pos],
+                  &[self.camera_point(1.0, src_pos), self.camera_point(1.0, tgt_pos)],
                   20.0,
                   color
                 ).unwrap();
@@ -541,12 +573,16 @@ impl event::EventHandler for State {
                   ctx,
                   &line,
                   graphics::DrawParam::default()
+                    .scale(self.camera_scale(1.0, Vector2::new(1.0, 1.0)))
                 ).unwrap()
               } else if time > action_time && time < action_time + 400 {
                 graphics::draw(
                   ctx,
                   &self.assets.after_attack_effect,
-                  graphics::DrawParam::default().dest(tgt_pos).color(color)
+                  graphics::DrawParam::default()
+                    .dest(self.camera_point(1.0, tgt_pos))
+                    .scale(self.camera_scale(1.0, Vector2::new(1.0, 1.0)))
+                    .color(color)
                 ).unwrap();
               }
             }
@@ -627,6 +663,41 @@ impl event::EventHandler for State {
       }
     }
   }
+
+  fn mouse_button_down_event(
+      &mut self, 
+      _ctx: &mut Context, 
+      button: MouseButton, 
+      _x: f32, 
+      _y: f32
+  ) {
+    dbg!(button);
+  }
+
+  fn mouse_motion_event(
+    &mut self, 
+    _ctx: &mut Context, 
+    _x: f32, 
+    _y: f32, 
+    xrel: f32, 
+    yrel: f32
+  ) {
+    self.camera_offset += Vector2::new(xrel, yrel);
+  }
+
+  fn mouse_wheel_event(
+    &mut self,
+    _ctx: &mut Context, 
+    _x: f32, 
+    y: f32, 
+  ) {
+    self.camera_zoom += y * -0.001;
+    if self.camera_zoom < 0.3 {
+      self.camera_zoom = 0.3;
+    } else if self.camera_zoom > 3.0 {
+      self.camera_zoom = 3.0;
+    }
+  }
 }
 
 fn main() {
@@ -645,6 +716,9 @@ fn main() {
     .add_resource_path(resource_dir)
     .build()
     .unwrap();
+
+  mouse::set_cursor_grabbed(ctx, true).unwrap();
+  mouse::set_cursor_hidden(ctx, true);
 
   let state = &mut State::new(ctx);
   event::run(ctx, event_loop, state).unwrap();
