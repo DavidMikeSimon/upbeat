@@ -8,10 +8,14 @@ use crate::anim;
 pub struct Assets {
   pub font: graphics::Font,
 
-  pub bg: graphics::Image,
   pub char1: graphics::Image,
   pub char2: graphics::Image,
   pub monster: graphics::Image,
+
+  pub sky_anim: Rc<anim::AnimAsset>,
+  pub grass_anim: Rc<anim::AnimAsset>,
+  pub rocks_anim: Rc<anim::AnimAsset>,
+  pub dirt_anim: Rc<anim::AnimAsset>,
 
   pub left_bush_anim: Rc<anim::AnimAsset>,
 
@@ -43,15 +47,19 @@ impl Assets {
 
     let font = graphics::Font::new(ctx, "/fonts/Catamaran/Catamaran-Regular.ttf").unwrap();
 
-    let bg = graphics::Image::new(ctx, "/images/bg.png").unwrap();
-    let char1 = graphics::Image::new(ctx, "/images/char1.png").unwrap();
+    let char1 = graphics::Image::new(ctx, "/images/battle_scene/perry blue.png").unwrap();
     let char2 = graphics::Image::new(ctx, "/images/char2.png").unwrap();
     let monster = graphics::Image::new(ctx, "/images/monster.png").unwrap();
+
+    let sky_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/sky.png", anim::AnimSettings::default()).unwrap();
+    let grass_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/grass.png", anim::AnimSettings::default()).unwrap();
+    let rocks_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/rocks.png", anim::AnimSettings::default()).unwrap();
+    let dirt_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/dirt.png", anim::AnimSettings::default()).unwrap();
 
     let left_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left bush", anim::AnimSettings{
       initial_offset_beats: 0,
       play_interval_beats: 4,
-      length_ms: 300,
+      length_ms: 400,
       beat_offset_ms: 0,
     }).unwrap();
 
@@ -151,11 +159,14 @@ impl Assets {
     Assets {
       font: font,
 
-      bg: bg,
       char1: char1,
       char2: char2,
       monster: monster,
 
+      sky_anim: Rc::new(sky_anim),
+      grass_anim: Rc::new(grass_anim),
+      rocks_anim: Rc::new(rocks_anim),
+      dirt_anim: Rc::new(dirt_anim),
       left_bush_anim: Rc::new(left_bush_anim),
 
       after_attack_effect: after_attack_effect,

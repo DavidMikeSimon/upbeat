@@ -183,9 +183,15 @@ enum CombatAction {
   Attack { src: ActionSource, tgt: ActionTarget }
 }
 
+struct BgAnim {
+  animation: anim::Animation,
+  position: Point2<f32>,
+  scale: Vector2<f32>
+}
+
 struct State {
   assets: Assets,
-  bg_anims: Vec<anim::Animation>,
+  bg_anims: Vec<BgAnim>,
   dt: Duration,
   time: Arc<AtomicU32>,
   lead_in_offset_ms: Arc<AtomicU32>,
@@ -208,7 +214,7 @@ impl State {
     let pattern = get_pattern(&midi, &timing);
 
     let sink = Sink::new(&rodio::default_output_device().unwrap());
-    sink.set_volume(0.0);
+    // sink.set_volume(0.0);
     sink.pause();
 
     let ogg_file = fs::File::open(OGG_PATH).unwrap();
@@ -224,7 +230,31 @@ impl State {
     let assets = Assets::new(ctx);
 
     let bg_anims = vec!(
-      anim::Animation::new(assets.left_bush_anim.clone()),
+      BgAnim {
+        animation: anim::Animation::new(assets.sky_anim.clone()),
+        position: Point2::<f32>::new(0.0, 0.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.grass_anim.clone()),
+        position: Point2::<f32>::new(0.0, 5.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.rocks_anim.clone()),
+        position: Point2::<f32>::new(79.0, 342.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.dirt_anim.clone()),
+        position: Point2::<f32>::new(0.0, 355.0),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      },
+      BgAnim {
+        animation: anim::Animation::new(assets.left_bush_anim.clone()),
+        position: Point2::<f32>::new(0.0, 374.46),
+        scale: Vector2::<f32>::new(1.0, 1.0),
+      }
     );
 
     State {
@@ -240,23 +270,15 @@ impl State {
       heroes: vec![
         HeroState {
           character: 0,
-          position: Point2::new(260.0, 125.0),
+          position: Point2::new(260.0, 113.0),
           attack_power: 50,
           hp: 180,
           max_hp: 180
-        },
-        HeroState {
-          character: 1,
-          position: Point2::new(390.0, 280.0),
-          attack_power: 60,
-          hp: 220,
-          max_hp: 220
-        },
-
+        }
       ],
       enemies: vec![
         EnemyState {
-          position: Point2::new(644.0, 85.0),
+          position: Point2::new(644.0, 120.0),
           attack_power: 80,
           hp: 400,
           max_hp: 400,
@@ -265,11 +287,11 @@ impl State {
       actions: hashmap![
         2 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
         3 => CombatAction::Attack{src: ActionSource::Hero{idx: 0}, tgt: ActionTarget::Enemy{idx: 0}},
-        4 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 1}},
-        5 => CombatAction::Attack{src: ActionSource::Hero{idx: 1}, tgt: ActionTarget::Enemy{idx: 0}},
+        4 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
+        5 => CombatAction::Attack{src: ActionSource::Hero{idx: 0}, tgt: ActionTarget::Enemy{idx: 0}},
         6 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
-        7 => CombatAction::Attack{src: ActionSource::Hero{idx: 1}, tgt: ActionTarget::Enemy{idx: 0}},
-        8 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 1}},
+        7 => CombatAction::Attack{src: ActionSource::Hero{idx: 0}, tgt: ActionTarget::Enemy{idx: 0}},
+        8 => CombatAction::Attack{src: ActionSource::Enemy{idx: 0}, tgt: ActionTarget::Hero{idx: 0}},
       ],
       command_window_hero: 0,
       last_measure_action_processed: None
@@ -277,7 +299,7 @@ impl State {
   }
 
   fn draw_command_window(&self, ctx: &mut Context, hero: &HeroState) {
-    let center_point = Point2::new(hero.position.x + 25.0, hero.position.y + 40.0);
+    let center_point = Point2::new(hero.position.x + 60.0, hero.position.y + 70.0);
 
     graphics::draw(
       ctx,
@@ -377,17 +399,11 @@ impl event::EventHandler for State {
     let window = graphics::screen_coordinates(ctx);
     let time = self.time.load(Ordering::Relaxed);
 
-    graphics::draw(
-      ctx,
-      &self.assets.bg,
-      graphics::DrawParam::default()
-    ).unwrap();
-
-    for anim in self.bg_anims.iter() {
+    for bg_anim in self.bg_anims.iter() {
       graphics::draw(
         ctx,
-        anim.get_frame(time, self.timing.ms_per_beat),
-        graphics::DrawParam::default().dest(Point2::<f32>::new(0.0, 100.0))
+        bg_anim.animation.get_frame(time, self.timing.ms_per_beat),
+        graphics::DrawParam::default().dest(bg_anim.position).scale(bg_anim.scale)
       ).unwrap();
     }
 
@@ -399,7 +415,7 @@ impl event::EventHandler for State {
           1 => &self.assets.char2,
           _ => panic!("Unknown hero character idx")
         },
-        graphics::DrawParam::default().dest(hero.position).scale(Vector2::new(0.5, 0.5))
+        graphics::DrawParam::default().dest(hero.position)
       ).unwrap();
 
       if self.command_window_hero == i {
@@ -409,7 +425,7 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 30.0)),
-        graphics::DrawParam::default().dest(hero.position + Vector2::new(0.0, 200.0))
+        graphics::DrawParam::default().dest(hero.position + Vector2::new(50.0, 380.0)).color(graphics::BLACK)
       ).unwrap();
     }
 
@@ -423,7 +439,7 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", enemy.hp, enemy.max_hp), self.assets.font, 30.0)),
-        graphics::DrawParam::default().dest(enemy.position + Vector2::new(200.0, 300.0))
+        graphics::DrawParam::default().dest(enemy.position + Vector2::new(200.0, 300.0)).color(graphics::BLACK)
       ).unwrap();
     }
 
@@ -476,12 +492,12 @@ impl event::EventHandler for State {
           match action {
             CombatAction::Attack { src, tgt } => {
               let src_pos = match *src {
-                ActionSource::Hero{ idx } => self.heroes[idx].position + Vector2::new(100.0, 90.0),
+                ActionSource::Hero{ idx } => self.heroes[idx].position + Vector2::new(200.0, 180.0),
                 ActionSource::Enemy{ idx } => self.enemies[idx].position + Vector2::new(220.0, 165.0),
               };
 
               let tgt_pos = match *tgt {
-                ActionTarget::Hero{ idx } => self.heroes[idx].position + Vector2::new(45.0, 90.0),
+                ActionTarget::Hero{ idx } => self.heroes[idx].position + Vector2::new(90.0, 180.0),
                 ActionTarget::Enemy{ idx } => self.enemies[idx].position + Vector2::new(180.0, 145.0),
               };
 

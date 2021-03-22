@@ -1,6 +1,7 @@
 use std::{path, rc::Rc};
 use ggez::{error::GameResult, filesystem, graphics, Context};
 
+#[derive(Default)]
 pub struct AnimSettings {
   pub initial_offset_beats: u32,
   pub play_interval_beats: u32,
@@ -14,15 +15,23 @@ pub struct AnimAsset {
 }
 
 impl AnimAsset {
-  pub fn new<P: AsRef<path::Path>>(ctx: &mut Context, dir: P, settings: AnimSettings) -> GameResult<AnimAsset> {
-    let mut frame_paths: Vec<path::PathBuf> = filesystem::read_dir(ctx, dir)?
-      .into_iter().filter_map(|path| {
-        match path.extension() {
-          Some(ext) if ext == "png" => Some(path),
-          _ => None
-        }
-      })
-      .collect();
+  pub fn new<P: AsRef<path::Path>>(ctx: &mut Context, src: P, settings: AnimSettings) -> GameResult<AnimAsset> {
+    let mut frame_paths: Vec<path::PathBuf> = match src.as_ref().extension() {
+      Some(ext) if ext == "png" => {
+        vec!(src.as_ref().to_path_buf())
+      },
+      _ => {
+        filesystem::read_dir(ctx, src)?
+          .into_iter().filter_map(|path| {
+            match path.extension() {
+              Some(ext) if ext == "png" => Some(path),
+              _ => None
+            }
+          })
+          .collect()
+      }
+    };
+
     frame_paths.sort();
     let frames = frame_paths.into_iter().map(|frame_path| {
       graphics::Image::new(ctx, frame_path).expect("Loading anim frame")
@@ -42,6 +51,10 @@ impl Animation {
   }
 
   pub fn get_frame(&self, time: u32, ms_per_beat: f32) -> &graphics::Image {
+    if &self.asset.frames.len() == &1 {
+      return &self.asset.frames[0];
+    }
+
     let offset: u32 = (self.asset.settings.initial_offset_beats as f32 * ms_per_beat) as u32 + self.asset.settings.beat_offset_ms;
     if time <= offset {
       return &self.asset.frames[0];
