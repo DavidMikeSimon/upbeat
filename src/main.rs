@@ -90,11 +90,13 @@ fn get_timing(midi: &Smf) -> MidiTiming {
   let ms_per_beat: f64 = (microseconds_per_beat as f64)/1000.0;
   let ms_per_tick = ms_per_beat/ticks_per_beat;
 
-  MidiTiming {
+  let timing = MidiTiming {
     ms_per_beat: ms_per_beat as f32,
     ms_per_tick: ms_per_tick as f32,
     beats_per_measure: beats_per_measure as f32
-  }
+  };
+  println!("{:?}", timing);
+  timing
 }
 
 fn get_pattern(midi: &Smf, timing: &MidiTiming) -> Vec<PatternNote> {
@@ -298,7 +300,7 @@ impl State {
       ],
       enemies: vec![
         EnemyState {
-          position: Point2::new(644.0, 120.0),
+          position: Point2::new(644.0, 140.0),
           attack_power: 80,
           hp: 400,
           max_hp: 400,
@@ -420,11 +422,13 @@ impl event::EventHandler for State {
     let time = self.time.load(Ordering::Relaxed);
 
     for bg_anim in self.bg_anims.iter() {
-      graphics::draw(
-        ctx,
-        bg_anim.animation.get_frame(time, self.timing.ms_per_beat),
-        graphics::DrawParam::default().dest(bg_anim.position).scale(bg_anim.scale)
-      ).unwrap();
+      if let Some(img) = bg_anim.animation.get_frame(time, self.timing.ms_per_beat) {
+        graphics::draw(
+          ctx,
+          img,
+          graphics::DrawParam::default().dest(bg_anim.position).scale(bg_anim.scale)
+        ).unwrap();
+      }
     }
 
     for (i, hero) in self.heroes.iter().enumerate() {
@@ -445,7 +449,7 @@ impl event::EventHandler for State {
       graphics::draw(
         ctx,
         &graphics::Text::new((format!("HP: {}/{}", hero.hp, hero.max_hp), self.assets.font, 30.0)),
-        graphics::DrawParam::default().dest(hero.position + Vector2::new(50.0, 380.0)).color(graphics::BLACK)
+        graphics::DrawParam::default().dest(hero.position + Vector2::new(60.0, 400.0)).color(graphics::BLACK)
       ).unwrap();
     }
 

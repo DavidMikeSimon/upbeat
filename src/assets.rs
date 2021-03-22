@@ -61,38 +61,36 @@ impl Assets {
     let dirt_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/dirt.png", anim::AnimSettings::default()).unwrap();
 
     let left_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left bush", anim::AnimSettings{
-      initial_offset_beats: 0,
-      play_interval_beats: 4,
-      length_ms: 400,
-      beat_offset_ms: 0,
+      play_interval_beats: 12,
+      length_ms: 900,
+      ..Default::default()
     }).unwrap();
 
     let right_bush_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/right bush", anim::AnimSettings{
-      initial_offset_beats: 0,
-      play_interval_beats: 4,
-      length_ms: 400,
-      beat_offset_ms: 0,
+      play_interval_beats: 12,
+      length_ms: 900,
+      ..Default::default()
     }).unwrap();
 
     let left_tree_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/left tree", anim::AnimSettings{
-      initial_offset_beats: 0,
-      play_interval_beats: 4,
-      length_ms: 400,
-      beat_offset_ms: 0,
+      initial_offset_beats: 3,
+      play_interval_beats: 12,
+      length_ms: 300,
+      ..Default::default()
     }).unwrap();
 
     let right_tree_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/right tree", anim::AnimSettings{
-      initial_offset_beats: 0,
-      play_interval_beats: 4,
-      length_ms: 400,
-      beat_offset_ms: 0,
+      initial_offset_beats: 3,
+      play_interval_beats: 12,
+      length_ms: 300,
+      ..Default::default()
     }).unwrap();
 
     let wind_anim = anim::AnimAsset::new(ctx, "/images/battle_scene/wind", anim::AnimSettings{
-      initial_offset_beats: 0,
-      play_interval_beats: 4,
-      length_ms: 400,
-      beat_offset_ms: 0,
+      play_interval_beats: 24,
+      length_ms: 1000,
+      hide_between_plays: true,
+      ..Default::default()
     }).unwrap();
 
     let after_attack_effect = graphics::Mesh::new_circle(
